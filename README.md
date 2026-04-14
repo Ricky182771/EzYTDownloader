@@ -1,4 +1,6 @@
-# EzYTDownloader
+# EzYTDownloader 
+
+![EzYTDownloader](https://github.com/Ricky182771/EzYTDownloader/blob/main/resources/icons/app_icon.png)
 
 A native Linux desktop application designed for downloading and converting YouTube content. The project focuses on performance, modularity, and resource efficiency, entirely avoiding the use of web-based frameworks.
 
