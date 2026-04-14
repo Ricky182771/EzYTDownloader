@@ -9,6 +9,7 @@
 Application::Application(int& argc, char** argv)
     : QApplication(argc, argv)
 {
+    setWindowIcon(QIcon(":/icons/app_icon.png"));
     setApplicationName(QStringLiteral("EzYTDownloader"));
     setApplicationVersion(QStringLiteral(APP_VERSION));
     setOrganizationName(QStringLiteral("EzYT"));

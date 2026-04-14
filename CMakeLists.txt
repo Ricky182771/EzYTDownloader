@@ -72,3 +72,10 @@ install(FILES scripts/install_deps.sh
     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                 GROUP_READ GROUP_EXECUTE
                 WORLD_READ WORLD_EXECUTE)
+
+install(FILES scripts/ezytdownloader.desktop 
+        DESTINATION share/applications)
+
+install(FILES resources/icons/app_icon.png 
+        DESTINATION share/icons/hicolor/256x256/apps 
+        RENAME ezytdownloader.png)
