@@ -30,36 +30,60 @@ The application is structured into three main layers:
 ## Prerequisites
 Ensure the following dependencies are installed before proceeding with compilation:
 
-- CMake (>= 3.20)
-- GCC (with C++20 support)
-- Qt6 (Core and Widgets modules)
+### Runtime dependencies
 - Python 3
 - yt-dlp
 - ffmpeg
+
+### Build dependencies
+
+| Dependency | Debian / Ubuntu | Fedora | Arch Linux | openSUSE |
+|------------|-----------------|--------|------------|----------|
+| CMake (≥ 3.20) | `cmake` | `cmake` | `cmake` | `cmake` |
+| C++20 compiler | `g++` | `gcc-c++` | `gcc` | `gcc-c++` |
+| Qt6 (Core, Widgets, Concurrent, Network) | `qt6-base-dev` `libqt6concurrent6` `libqt6network6` | `qt6-qtbase-devel` | `qt6-base` | `qt6-base-devel` |
+
+> **Tip:** You can use `scripts/install_deps.sh` to auto-install runtime dependencies (python3, ffmpeg, yt-dlp).
 
 ## Installation and Execution
 
 ### Precompiled Binaries
 For users who prefer not to build from source, the final executable is available in the **Releases** section of this repository.
-Building from Source
-To manually compile and install the application:
 
-```Bash
+### Building from Source
+To manually compile the application:
 
+```bash
 # Clone the repository
 git clone https://github.com/Ricky182771/EzYTDownloader.git
 cd EzYTDownloader
 
 # Create the build directory
-mkdir build && cd build
+mkdir -p build && cd build
 
 # Configure and compile
 cmake ..
 make -j$(nproc)
-
-# Optional: Global installation
-sudo make install
 ```
+
+### System Installation
+If you downloaded only the binary, you can install to your system by using the provided install script to register the binary, desktop entry, and application icon system-wide. **This step requires `sudo`.**
+
+```bash
+# Install (binary → /usr/local/bin, desktop entry, icon)
+sudo bash scripts/install.sh
+```
+
+You can then launch **EzYTDownloader** from your application menu or directly from the terminal.
+
+### Uninstalling
+To remove all installed files:
+
+```bash
+sudo bash scripts/uninstall.sh
+```
+
+The script will ask for confirmation before deleting anything.
 
 ## Usage
 

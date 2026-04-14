@@ -11,6 +11,20 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
+# ── Build dependencies (package names by distribution) ───────────────────────
+#
+# Debian / Ubuntu:
+#   sudo apt install cmake g++ qt6-base-dev libqt6concurrent6 libqt6network6
+#
+# Fedora:
+#   sudo dnf install cmake gcc-c++ qt6-qtbase-devel
+#
+# Arch Linux:
+#   sudo pacman -S cmake gcc qt6-base
+#
+# openSUSE:
+#   sudo zypper install cmake gcc-c++ qt6-base-devel
+#
 # ── Find Qt6 ─────────────────────────────────────────────────────────────────
 find_package(Qt6 REQUIRED COMPONENTS Widgets Core Concurrent Network)
 
