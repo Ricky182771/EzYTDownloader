@@ -1,0 +1,280 @@
+/* =========================================================================
+   EzYTDownloader — Premium Dark Theme (QSS)
+   ========================================================================= */
+
+/* ── Global ─────────────────────────────────────────────────────────────── */
+* {
+    font-family: "Inter", "Segoe UI", "Roboto", sans-serif;
+    font-size: 13px;
+}
+
+QWidget {
+    background-color: #0d0f14;
+    color: #e4e7ec;
+}
+
+/* ── Main Window ────────────────────────────────────────────────────────── */
+QMainWindow {
+    background-color: #0d0f14;
+}
+
+/* ── Cards / Group Boxes ────────────────────────────────────────────────── */
+QGroupBox {
+    background-color: rgba(22, 27, 38, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    margin-top: 14px;
+    padding: 18px 14px 14px 14px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 4px 12px;
+    color: #a0aec0;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #6c5ce7, stop:1 #00cec9);
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 22px;
+    font-weight: 600;
+    font-size: 13px;
+    min-height: 20px;
+}
+
+QPushButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #7e6ef0, stop:1 #1ae0d9);
+}
+
+QPushButton:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 #5a4bd1, stop:1 #00b5b0);
+}
+
+QPushButton:disabled {
+    background: #2d3748;
+    color: #636e7f;
+}
+
+QPushButton#btnCancel {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+    border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+QPushButton#btnCancel:hover {
+    background: rgba(231, 76, 60, 0.25);
+}
+
+QPushButton#btnBrowse {
+    background: rgba(108, 92, 231, 0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(108, 92, 231, 0.3);
+    padding: 9px 14px;
+}
+
+QPushButton#btnBrowse:hover {
+    background: rgba(108, 92, 231, 0.25);
+}
+
+/* ── Line Edit ──────────────────────────────────────────────────────────── */
+QLineEdit {
+    background-color: rgba(30, 36, 50, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 9px 14px;
+    color: #e4e7ec;
+    selection-background-color: #6c5ce7;
+    selection-color: #ffffff;
+}
+
+QLineEdit:focus {
+    border: 1px solid #6c5ce7;
+    background-color: rgba(35, 42, 58, 0.95);
+}
+
+QLineEdit:disabled {
+    background-color: rgba(20, 24, 34, 0.6);
+    color: #636e7f;
+}
+
+/* ── Combo Box ──────────────────────────────────────────────────────────── */
+QComboBox {
+    background-color: rgba(30, 36, 50, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: #e4e7ec;
+    min-width: 120px;
+}
+
+QComboBox:hover {
+    border: 1px solid rgba(108, 92, 231, 0.5);
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: 28px;
+    border: none;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #a0aec0;
+    margin-right: 8px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1a1f2e;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    selection-background-color: rgba(108, 92, 231, 0.35);
+    selection-color: #ffffff;
+    padding: 4px;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px 12px;
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QComboBox:disabled {
+    background-color: rgba(20, 24, 34, 0.6);
+    color: #636e7f;
+}
+
+/* ── Progress Bar ───────────────────────────────────────────────────────── */
+QProgressBar {
+    background-color: rgba(30, 36, 50, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    text-align: center;
+    color: #e4e7ec;
+    font-weight: 600;
+    font-size: 11px;
+    min-height: 22px;
+    max-height: 22px;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 #6c5ce7, stop:0.5 #00cec9, stop:1 #6c5ce7);
+    border-radius: 9px;
+}
+
+/* ── Labels ─────────────────────────────────────────────────────────────── */
+QLabel {
+    color: #e4e7ec;
+    background: transparent;
+}
+
+QLabel#lblTitle {
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+QLabel#lblSubtitle {
+    font-size: 12px;
+    color: #8892a4;
+    font-weight: 400;
+}
+
+QLabel#lblStatus {
+    font-size: 12px;
+    color: #a0aec0;
+    padding: 4px 0;
+}
+
+QLabel#lblError {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+QLabel#lblSuccess {
+    color: #2ecc71;
+    font-weight: 600;
+}
+
+QLabel#lblVideoTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e4e7ec;
+}
+
+QLabel#lblDuration {
+    font-size: 12px;
+    color: #8892a4;
+}
+
+/* ── Scroll Area ────────────────────────────────────────────────────────── */
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+QScrollBar:vertical {
+    background: rgba(30, 36, 50, 0.3);
+    width: 8px;
+    border-radius: 4px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(108, 92, 231, 0.4);
+    border-radius: 4px;
+    min-height: 30px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: rgba(108, 92, 231, 0.6);
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: none;
+    height: 0;
+}
+
+/* ── Dialog ─────────────────────────────────────────────────────────────── */
+QDialog {
+    background-color: #12151c;
+}
+
+QDialogButtonBox QPushButton {
+    min-width: 80px;
+}
+
+/* ── Tool Tip ───────────────────────────────────────────────────────────── */
+QToolTip {
+    background-color: #1a1f2e;
+    color: #e4e7ec;
+    border: 1px solid rgba(108, 92, 231, 0.3);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+/* ── Separator line ─────────────────────────────────────────────────────── */
+QFrame#separator {
+    background-color: rgba(255, 255, 255, 0.06);
+    max-height: 1px;
+    min-height: 1px;
+}
