@@ -1,20 +1,16 @@
 #include "DependencyDialog.h"
-#include "Utils.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QProcess>
-#include <QMessageBox>
-#include <QFileInfo>
 #include <QDebug>
 
 DependencyDialog::DependencyDialog(const QStringList& missing, QWidget* parent)
     : QDialog(parent)
 {
     setWindowTitle(tr("Missing Dependencies"));
-    setMinimumWidth(440);
+    setMinimumWidth(500);
     setModal(true);
     setupUi(missing);
 }
@@ -40,14 +36,29 @@ void DependencyDialog::setupUi(const QStringList& missing)
     for (const auto& dep : missing)
         listHtml += QStringLiteral("<li><b>%1</b></li>").arg(dep);
 
-    listHtml += QStringLiteral("</ul>"
-        "<p style='color:#a0aec0; font-size:12px;'>"
-        "EzYTDownloader needs these to function. You can install them "
-        "automatically or do it manually.</p>");
+    listHtml += QStringLiteral("</ul>");
+
+    // ── Install instructions ────────────────────────────────────────────
+    listHtml += QStringLiteral(
+        "<p style='color:#a0aec0; font-size:13px;'>"
+        "Install them with your package manager:</p>"
+        "<table style='color:#e4e7ec; font-size:12px; margin-left:8px;'>"
+        "<tr><td style='padding:3px 12px 3px 0;'><b>Debian/Ubuntu:</b></td>"
+        "    <td><code>sudo apt install yt-dlp ffmpeg</code></td></tr>"
+        "<tr><td style='padding:3px 12px 3px 0;'><b>Fedora:</b></td>"
+        "    <td><code>sudo dnf install yt-dlp ffmpeg</code></td></tr>"
+        "<tr><td style='padding:3px 12px 3px 0;'><b>Arch:</b></td>"
+        "    <td><code>sudo pacman -S yt-dlp ffmpeg</code></td></tr>"
+        "<tr><td style='padding:3px 12px 3px 0;'><b>openSUSE:</b></td>"
+        "    <td><code>sudo zypper install yt-dlp ffmpeg</code></td></tr>"
+        "</table>"
+        "<p style='color:#a0aec0; font-size:12px; margin-top:12px;'>"
+        "After installing, click <b>Retry</b> to check again.</p>");
 
     m_lblInfo = new QLabel(listHtml);
     m_lblInfo->setWordWrap(true);
     m_lblInfo->setTextFormat(Qt::RichText);
+    m_lblInfo->setTextInteractionFlags(Qt::TextSelectableByMouse);
     root->addWidget(m_lblInfo);
 
     // ── Buttons ─────────────────────────────────────────────────────────
@@ -60,66 +71,16 @@ void DependencyDialog::setupUi(const QStringList& missing)
     connect(m_btnClose, &QPushButton::clicked, this, &QDialog::reject);
     btnRow->addWidget(m_btnClose);
 
-    m_btnInstall = new QPushButton(tr("Install Automatically"));
-    m_btnInstall->setFixedWidth(180);
-    connect(m_btnInstall, &QPushButton::clicked, this, &DependencyDialog::onInstallClicked);
-    btnRow->addWidget(m_btnInstall);
+    m_btnRetry = new QPushButton(tr("Retry"));
+    m_btnRetry->setFixedWidth(120);
+    connect(m_btnRetry, &QPushButton::clicked, this, &DependencyDialog::onRetryClicked);
+    btnRow->addWidget(m_btnRetry);
 
     root->addLayout(btnRow);
 }
 
-void DependencyDialog::onInstallClicked()
+void DependencyDialog::onRetryClicked()
 {
-    const QString script = Utils::findBashScript();
-    if (script.isEmpty()) {
-        QMessageBox::critical(this, tr("Error"),
-            tr("Could not locate install_deps.sh.\n"
-               "Please reinstall the application."));
-        return;
-    }
-
-    const QString terminal = Utils::detectTerminal();
-    if (terminal.isEmpty()) {
-        QMessageBox::critical(this, tr("Error"),
-            tr("No terminal emulator found.\n"
-               "Please install konsole, gnome-terminal, or xterm."));
-        return;
-    }
-
-    qDebug() << "[DepDialog] Launching" << terminal << "with" << script;
-
-    // Build the command to run inside the terminal
-    // Format: terminal -e bash /path/to/install_deps.sh
-    QStringList args;
-    const QString termName = QFileInfo(terminal).fileName();
-
-    if (termName == QStringLiteral("konsole")) {
-        args << QStringLiteral("-e") << QStringLiteral("bash") << script;
-    } else if (termName == QStringLiteral("gnome-terminal")) {
-        args << QStringLiteral("--") << QStringLiteral("bash") << script;
-    } else if (termName == QStringLiteral("xfce4-terminal")) {
-        args << QStringLiteral("-e") << QStringLiteral("bash %1").arg(script);
-    } else if (termName == QStringLiteral("alacritty")) {
-        args << QStringLiteral("-e") << QStringLiteral("bash") << script;
-    } else if (termName == QStringLiteral("kitty")) {
-        args << QStringLiteral("bash") << script;
-    } else {
-        // Generic fallback: most terminals support -e
-        args << QStringLiteral("-e") << QStringLiteral("bash") << script;
-    }
-
-    const bool ok = QProcess::startDetached(terminal, args);
-    if (!ok) {
-        QMessageBox::critical(this, tr("Error"),
-            tr("Failed to launch terminal:\n%1").arg(terminal));
-        return;
-    }
-
-    emit installRequested();
-
-    QMessageBox::information(this, tr("Installing"),
-        tr("A terminal window has been opened to install dependencies.\n\n"
-           "After installation completes, please restart EzYTDownloader."));
-
+    emit retryRequested();
     accept();
 }

@@ -37,7 +37,7 @@ echo -e "${NC}"
 # ── Confirmation ─────────────────────────────────────────────────────────────
 echo -e "This will remove the following:"
 echo -e "  • ${CYAN}$BIN_DIR/$APP_NAME${NC}"
-echo -e "  • ${CYAN}$DATA_DIR/${NC}  (python backend, scripts)"
+echo -e "  • ${CYAN}$DATA_DIR/${NC}  (application data)"
 echo -e "  • ${CYAN}$DESKTOP_DIR/ezytdownloader.desktop${NC}"
 echo -e "  • ${CYAN}$ICON_DIR/ezytdownloader.png${NC}"
 echo ""

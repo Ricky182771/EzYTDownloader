@@ -51,10 +51,9 @@ void Application::onDepsMissing(const QStringList& missing)
         quit();
     });
 
-    connect(dlg, &QDialog::accepted, this, [this]() {
-        // User clicked install — app should quit, they'll restart after install
-        qDebug() << "[App] Install launched, quitting.";
-        quit();
+    connect(dlg, &DependencyDialog::retryRequested, this, [this]() {
+        qDebug() << "[App] User requested dependency re-check.";
+        m_depChecker->checkAll();
     });
 
     dlg->show();

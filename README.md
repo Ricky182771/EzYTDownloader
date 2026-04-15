@@ -5,7 +5,7 @@
 A native Linux desktop application designed for downloading and converting YouTube content. The project focuses on performance, modularity, and resource efficiency, entirely avoiding the use of web-based frameworks.
 
 ## Overview
-EzYTDownloader provides a graphical interface for stream extraction and media conversion. It utilizes a hybrid architecture that combines the speed of a C++/Qt6 frontend with a Python backend for metadata management. All downloads are processed through ffmpeg to ensure broad compatibility of the final files.
+EzYTDownloader provides a graphical interface for stream extraction and media conversion. It invokes `yt-dlp` directly as a system command — no Python runtime is required. All downloads are processed through ffmpeg to ensure broad compatibility of the final files.
 
 ## Features
 **Native UI:** Developed with Qt6 to offer a smooth and lightweight desktop experience.
@@ -16,22 +16,22 @@ EzYTDownloader provides a graphical interface for stream extraction and media co
 
 **Asynchronous Processing:** Non-blocking interface with real-time tracking of progress, speed, and estimated time of arrival (ETA).
 
-**Modular Architecture:** Strict separation of responsibilities through JSON-lines-based IPC between the C++ core and the Python extraction wrapper.
+**Zero Python dependency:** Communicates with `yt-dlp` directly via its CLI, keeping the dependency footprint minimal.
 
 ## Architecture
-The application is structured into three main layers:
+The application is structured into two main layers:
 
 | Layer | Technology | Responsibility |
 |-------|------------|----------------|
-| **UI & Core** | **C++20 / Qt6** | Main window, orchestration of asynchronous processes (QProcess), and state management. |
-| **Backend** | **Python 3** | Wrapper for yt-dlp responsible for fetching metadata and managing downloads via a JSON-lines protocol. |
+| **UI & Core** | **C++20 / Qt6** | Main window, orchestration of asynchronous processes (QProcess), metadata parsing, and state management. |
 | **Conversion** | **ffmpeg** | Remuxing of native formats (e.g., .webm) to final .mp4, .mkv, or .mp3 files. |
+
+`yt-dlp` is invoked as an external command for fetching video metadata (`--dump-json`) and downloading streams.
 
 ## Prerequisites
 Ensure the following dependencies are installed before proceeding with compilation:
 
 ### Runtime dependencies
-- Python 3
 - yt-dlp
 - ffmpeg
 
@@ -42,8 +42,6 @@ Ensure the following dependencies are installed before proceeding with compilati
 | CMake (≥ 3.20) | `cmake` | `cmake` | `cmake` | `cmake` |
 | C++20 compiler | `g++` | `gcc-c++` | `gcc` | `gcc-c++` |
 | Qt6 (Core, Widgets, Concurrent, Network) | `qt6-base-dev` `libqt6concurrent6` `libqt6network6` | `qt6-qtbase-devel` | `qt6-base` | `qt6-base-devel` |
-
-> **Tip:** You can use `scripts/install_deps.sh` to auto-install runtime dependencies (python3, ffmpeg, yt-dlp).
 
 ## Installation and Execution
 

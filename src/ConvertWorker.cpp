@@ -88,7 +88,23 @@ bool ConvertWorker::isRunning() const
 void ConvertWorker::onReadyReadStderr()
 {
     m_stderrBuffer += m_process->readAllStandardError();
-    parseFfmpegProgress(m_stderrBuffer);
+
+    while (true) {
+        int idxN = m_stderrBuffer.indexOf('\n');
+        int idxR = m_stderrBuffer.indexOf('\r');
+
+        int idx;
+        if (idxN < 0 && idxR < 0) break;
+        else if (idxN < 0)        idx = idxR;
+        else if (idxR < 0)        idx = idxN;
+        else                      idx = qMin(idxN, idxR);
+
+        const QByteArray line = m_stderrBuffer.left(idx).trimmed();
+        m_stderrBuffer.remove(0, idx + 1);
+
+        if (!line.isEmpty())
+            parseFfmpegProgress(line);
+    }
 }
 
 void ConvertWorker::onProcessFinished(int exitCode, QProcess::ExitStatus status)

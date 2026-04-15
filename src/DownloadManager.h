@@ -8,8 +8,8 @@ class FetchWorker;
 class ConvertWorker;
 
 /// Orchestrates the full download pipeline:
-///   1. Fetch metadata (Python)
-///   2. Download stream (Python)
+///   1. Fetch metadata (yt-dlp --dump-json)
+///   2. Download stream (yt-dlp)
 ///   3. Convert / remux (ffmpeg)
 ///   4. Cleanup temp files
 class DownloadManager : public QObject {

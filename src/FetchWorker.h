@@ -5,8 +5,9 @@
 #include <QList>
 #include "StreamInfo.h"
 
-/// Wraps a QProcess running `python3 fetch.py`.
-/// Parses JSON-line output for metadata, progress, completion, and errors.
+/// Wraps a QProcess running `yt-dlp` directly (no Python intermediary).
+/// For metadata: parses the JSON blob from `yt-dlp --dump-json`.
+/// For downloads: parses custom progress lines via --progress-template.
 class FetchWorker : public QObject {
     Q_OBJECT
 
@@ -18,8 +19,8 @@ public:
     void fetchMetadata(const QString& url);
 
     /// Download a specific format.  Emits downloadProgress() / downloadFinished().
-    /// If mergeAudio is true, passes --merge-audio so yt-dlp downloads
-    /// video+bestaudio and merges them into mkv.
+    /// If mergeAudio is true, requests video+bestaudio and merges into the
+    /// extension derived from outputPath.
     void downloadStream(const QString& url, const QString& formatId,
                         const QString& outputPath, bool mergeAudio = false);
 
@@ -44,10 +45,16 @@ private slots:
     void onProcessFinished(int exitCode, QProcess::ExitStatus status);
 
 private:
-    void startProcess(const QStringList& args);
-    void parseJsonLine(const QByteArray& line);
+    enum class Mode { Metadata, Download };
+
+    void startProcess(const QStringList& args, Mode mode);
+    void parseMetadataJson(const QByteArray& json);
+    void parseProgressLine(const QByteArray& line);
 
     QProcess*  m_process = nullptr;
     QByteArray m_stdoutBuffer;
+    QByteArray m_stderrBuffer;
     bool       m_cancelled = false;
+    Mode       m_mode      = Mode::Metadata;
+    QString    m_expectedOutputPath;   // for download completion
 };

@@ -64,28 +64,15 @@ add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${RESOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::Core Qt6::Concurrent Qt6::Network)
 
-# ── Compile definitions: project source dir for dev‑mode path resolution ────
+# ── Compile definitions ──────────────────────────────────────────────────────
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     APP_VERSION="${PROJECT_VERSION}"
-    SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 # ── Install rules ────────────────────────────────────────────────────────────
 include(GNUInstallDirs)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-install(FILES python/fetch.py
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/python
-    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                GROUP_READ GROUP_EXECUTE
-                WORLD_READ WORLD_EXECUTE)
-
-install(FILES scripts/install_deps.sh
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/scripts
-    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                GROUP_READ GROUP_EXECUTE
-                WORLD_READ WORLD_EXECUTE)
 
 install(FILES scripts/ezytdownloader.desktop 
         DESTINATION share/applications)

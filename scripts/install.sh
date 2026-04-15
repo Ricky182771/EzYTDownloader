@@ -65,15 +65,7 @@ info "Installing binary → $BIN_DIR/$APP_NAME"
 sudo install -Dm755 "$BINARY" "$BIN_DIR/$APP_NAME"
 success "Binary installed."
 
-# ── Install Python backend ──────────────────────────────────────────────────
-info "Installing Python backend → $DATA_DIR/python/"
-sudo install -Dm755 "$PROJECT_ROOT/python/fetch.py" "$DATA_DIR/python/fetch.py"
-success "Python backend installed."
 
-# ── Install helper scripts ──────────────────────────────────────────────────
-info "Installing helper scripts → $DATA_DIR/scripts/"
-sudo install -Dm755 "$PROJECT_ROOT/scripts/install_deps.sh" "$DATA_DIR/scripts/install_deps.sh"
-success "Helper scripts installed."
 
 # ── Install desktop entry ───────────────────────────────────────────────────
 info "Installing desktop entry → $DESKTOP_DIR/"
@@ -104,7 +96,6 @@ echo ""
 echo -e "${GREEN}${BOLD}✅  EzYTDownloader installed successfully!${NC}"
 echo ""
 echo -e "  Binary:    ${CYAN}$BIN_DIR/$APP_NAME${NC}"
-echo -e "  Data:      ${CYAN}$DATA_DIR/${NC}"
 echo -e "  Desktop:   ${CYAN}$DESKTOP_DIR/ezytdownloader.desktop${NC}"
 echo -e "  Icon:      ${CYAN}$ICON_DIR/ezytdownloader.png${NC}"
 echo ""

@@ -3,9 +3,9 @@
 #include <QObject>
 #include <QStringList>
 
-/// Verifies that required external commands (python3, yt-dlp, ffmpeg, bash) are
-/// reachable on the system PATH.  Runs each check via a short-lived QProcess
-/// inside QtConcurrent::run so the UI stays responsive.
+/// Verifies that required external commands (yt-dlp, ffmpeg) are reachable on
+/// the system PATH.  Runs each check via a short-lived QProcess inside
+/// QtConcurrent::run so the UI stays responsive.
 class DependencyChecker : public QObject {
     Q_OBJECT
 
@@ -25,10 +25,8 @@ private:
     static bool isCommandAvailable(const QString& cmd);
 
     QStringList m_required = {
-        QStringLiteral("python3"),
         QStringLiteral("yt-dlp"),
         QStringLiteral("ffmpeg"),
-        QStringLiteral("bash"),
     };
 
     QStringList m_optional = {
