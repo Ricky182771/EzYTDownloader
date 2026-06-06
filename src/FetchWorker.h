@@ -4,9 +4,10 @@
 #include <QProcess>
 #include <QList>
 #include "StreamInfo.h"
+#include "PlaylistEntry.h"
 
 /// Wraps a QProcess running `yt-dlp` directly (no Python intermediary).
-/// For metadata: parses the JSON blob from `yt-dlp --dump-json`.
+/// For metadata: parses the JSON blob from `yt-dlp --dump-single-json`.
 /// For downloads: parses custom progress lines via --progress-template.
 class FetchWorker : public QObject {
     Q_OBJECT
@@ -15,7 +16,8 @@ public:
     explicit FetchWorker(QObject* parent = nullptr);
     ~FetchWorker() override;
 
-    /// Fetch metadata for a URL.  Emits metadataReady() or errorOccurred().
+    /// Fetch metadata for a URL. Detects playlists automatically.
+    /// Emits metadataReady(), playlistDetected(), or errorOccurred().
     void fetchMetadata(const QString& url);
 
     /// Download a specific format.  Emits downloadProgress() / downloadFinished().
@@ -23,6 +25,15 @@ public:
     /// extension derived from outputPath.
     void downloadStream(const QString& url, const QString& formatId,
                         const QString& outputPath, bool mergeAudio = false);
+
+    /// Download a playlist item using yt-dlp format selectors and built-in post-processing.
+    /// quality: "best", "1080", "720", "480", "360"
+    /// Emits downloadProgress() / downloadFinished("") on completion.
+    void downloadPlaylistItem(const QString& url,
+                              const QString& format,
+                              const QString& quality,
+                              const QString& bitrate,
+                              const QString& outputDir);
 
     /// Kill the running process.
     void cancel();
@@ -34,6 +45,7 @@ signals:
                        const QString& title,
                        double duration,
                        const QString& thumbnail);
+    void playlistDetected(const QList<PlaylistEntry>& entries, const QString& title);
     void downloadProgress(double percent, const QString& speed, const QString& eta);
     void downloadFinished(const QString& filePath);
     void errorOccurred(const QString& message);
@@ -45,7 +57,7 @@ private slots:
     void onProcessFinished(int exitCode, QProcess::ExitStatus status);
 
 private:
-    enum class Mode { Metadata, Download };
+    enum class Mode { Metadata, Download, PlaylistItemDownload };
 
     void startProcess(const QStringList& args, Mode mode);
     void parseMetadataJson(const QByteArray& json);

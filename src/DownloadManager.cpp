@@ -18,6 +18,8 @@ DownloadManager::DownloadManager(QObject* parent)
     // ── FetchWorker signals ─────────────────────────────────────────────
     connect(m_fetch, &FetchWorker::metadataReady,
             this,    &DownloadManager::onMetadataReady);
+    connect(m_fetch, &FetchWorker::playlistDetected,
+            this,    &DownloadManager::onPlaylistDetected);
     connect(m_fetch, &FetchWorker::downloadProgress,
             this,    &DownloadManager::onDownloadProgress);
     connect(m_fetch, &FetchWorker::downloadFinished,
@@ -80,9 +82,28 @@ void DownloadManager::startDownload(const QString& url,
     m_fetch->downloadStream(url, stream.formatId, m_tempPath, /*mergeAudio=*/isVideo);
 }
 
+void DownloadManager::downloadPlaylist(const QList<PlaylistEntry>& entries,
+                                        const QString& outputDir,
+                                        const QString& format,
+                                        const QString& quality,
+                                        const QString& bitrate)
+{
+    m_cancelled        = false;
+    m_playlistMode     = true;
+    m_playlistQueue    = entries;
+    m_playlistIndex    = 0;
+    m_playlistOutputDir = outputDir;
+    m_playlistFormat   = format;
+    m_playlistQuality  = quality;
+    m_playlistBitrate  = bitrate;
+
+    downloadNextPlaylistItem();
+}
+
 void DownloadManager::cancel()
 {
-    m_cancelled = true;
+    m_cancelled    = true;
+    m_playlistMode = false;
     m_fetch->cancel();
     m_convert->cancel();
     cleanupTemp();
@@ -107,6 +128,13 @@ void DownloadManager::onMetadataReady(const QList<StreamInfo>& streams,
     emit metadataReady(streams, title, duration, thumbnail);
 }
 
+void DownloadManager::onPlaylistDetected(const QList<PlaylistEntry>& entries,
+                                          const QString& title)
+{
+    emit statusMessage(tr("Playlist detected: %1 (%2 videos)").arg(title).arg(entries.size()));
+    emit playlistDetected(entries, title);
+}
+
 void DownloadManager::onDownloadProgress(double percent, const QString& speed, const QString& eta)
 {
     emit downloadProgress(static_cast<int>(percent), speed, eta);
@@ -116,10 +144,15 @@ void DownloadManager::onDownloadFinished(const QString& rawPath)
 {
     if (m_cancelled) return;
 
+    if (m_playlistMode) {
+        ++m_playlistIndex;
+        downloadNextPlaylistItem();
+        return;
+    }
+
     m_tempPath = rawPath;
     qDebug() << "[DownloadManager] Raw download complete:" << rawPath;
 
-    // Now convert / remux via ffmpeg
     emit statusMessage(tr("Converting…"));
     emit conversionProgress(0);
 
@@ -159,6 +192,30 @@ void DownloadManager::cleanupTemp()
         qDebug() << "[DownloadManager] Removed temp:" << m_tempPath;
     }
     m_tempPath.clear();
+}
+
+void DownloadManager::downloadNextPlaylistItem()
+{
+    if (m_cancelled || m_playlistIndex >= m_playlistQueue.size()) {
+        m_playlistMode = false;
+        if (!m_cancelled) {
+            emit statusMessage(tr("Playlist download complete!"));
+            emit finished(m_playlistOutputDir);
+        }
+        return;
+    }
+
+    const PlaylistEntry& entry = m_playlistQueue[m_playlistIndex];
+    const int total = m_playlistQueue.size();
+
+    emit playlistItemStarted(m_playlistIndex + 1, total, entry.title);
+    emit statusMessage(tr("Downloading %1/%2: %3")
+                           .arg(m_playlistIndex + 1).arg(total).arg(entry.title));
+    emit downloadProgress(0, QString(), QString());
+
+    m_fetch->downloadPlaylistItem(entry.url, m_playlistFormat,
+                                   m_playlistQuality, m_playlistBitrate,
+                                   m_playlistOutputDir);
 }
 
 QString DownloadManager::buildFinalPath() const

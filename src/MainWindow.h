@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <QList>
 #include "StreamInfo.h"
+#include "PlaylistEntry.h"
 
 class QLineEdit;
 class QComboBox;
@@ -39,6 +40,8 @@ private slots:
                          const QString& title,
                          double duration,
                          const QString& thumbnail);
+    void onPlaylistDetected(const QList<PlaylistEntry>& entries, const QString& title);
+    void onPlaylistItemStarted(int current, int total, const QString& currentTitle);
     void onDownloadProgress(int percent, const QString& speed, const QString& eta);
     void onConversionProgress(int percent);
     void onFinished(const QString& filePath);
@@ -96,4 +99,8 @@ private:
     QList<StreamInfo>      m_streams;
     QString                m_currentUrl;
     double                 m_currentDuration = 0.0;
+
+    // ── Playlist state ───────────────────────────────────────────────────
+    bool                 m_isPlaylist = false;
+    QList<PlaylistEntry> m_playlistEntries;
 };

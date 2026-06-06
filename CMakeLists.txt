@@ -52,6 +52,7 @@ set(HEADERS
     src/ConvertWorker.h
     src/SettingsManager.h
     src/StreamInfo.h
+    src/PlaylistEntry.h
     src/Utils.h
 )
 

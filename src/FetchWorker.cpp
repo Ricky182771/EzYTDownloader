@@ -23,13 +23,55 @@ FetchWorker::~FetchWorker()
 void FetchWorker::fetchMetadata(const QString& url)
 {
     QStringList args = {
-        QStringLiteral("--dump-json"),
+        QStringLiteral("--dump-single-json"),
+        QStringLiteral("--flat-playlist"),
         QStringLiteral("--no-download"),
         QStringLiteral("--no-warnings"),
         url,
     };
 
     startProcess(args, Mode::Metadata);
+}
+
+void FetchWorker::downloadPlaylistItem(const QString& url,
+                                        const QString& format,
+                                        const QString& quality,
+                                        const QString& bitrate,
+                                        const QString& outputDir)
+{
+    m_expectedOutputPath = outputDir;
+
+    QString fmtSelector;
+    if (format == QStringLiteral("mp3")) {
+        fmtSelector = QStringLiteral("bestaudio/best");
+    } else if (quality == QStringLiteral("best")) {
+        fmtSelector = QStringLiteral("bestvideo+bestaudio/best");
+    } else {
+        fmtSelector = QStringLiteral("bestvideo[height<=%1]+bestaudio/best[height<=%1]/best")
+                          .arg(quality);
+    }
+
+    QStringList args = {
+        QStringLiteral("-f"),  fmtSelector,
+        QStringLiteral("-o"),  outputDir + QStringLiteral("/%(title)s.%(ext)s"),
+        QStringLiteral("--no-warnings"),
+        QStringLiteral("--newline"),
+        QStringLiteral("--progress-template"),
+        QStringLiteral("download:EZPROG %(progress._percent_str)s %(progress._speed_str)s %(progress._eta_str)s"),
+        QStringLiteral("--no-overwrites"),
+    };
+
+    if (format == QStringLiteral("mp3")) {
+        args << QStringLiteral("--extract-audio")
+             << QStringLiteral("--audio-format") << QStringLiteral("mp3")
+             << QStringLiteral("--audio-quality") << bitrate;
+    } else {
+        args << QStringLiteral("--remux-video") << format;
+    }
+
+    args << url;
+
+    startProcess(args, Mode::PlaylistItemDownload);
 }
 
 void FetchWorker::downloadStream(const QString& url, const QString& formatId,
@@ -201,7 +243,7 @@ void FetchWorker::onProcessFinished(int exitCode, QProcess::ExitStatus status)
         if (!m_cancelled && status == QProcess::NormalExit && exitCode == 0)
             parseMetadataJson(m_stdoutBuffer);
     } else {
-        // Download mode: process remaining progress lines
+        // Download / playlist-item mode: process remaining progress lines
         while (true) {
             const int idx = m_stdoutBuffer.indexOf('\n');
             if (idx < 0)
@@ -225,6 +267,12 @@ void FetchWorker::onProcessFinished(int exitCode, QProcess::ExitStatus status)
 
     if (status == QProcess::CrashExit || exitCode != 0) {
         emit errorOccurred(tr("yt-dlp exited with code %1").arg(exitCode));
+        return;
+    }
+
+    // Playlist item: yt-dlp handled remux/extraction internally; no file lookup needed.
+    if (m_mode == Mode::PlaylistItemDownload) {
+        emit downloadFinished(QString());
         return;
     }
 
@@ -281,6 +329,49 @@ void FetchWorker::parseMetadataJson(const QByteArray& json)
 
     const QJsonObject info = doc.object();
 
+    // ── Playlist detection ────────────────────────────────────────────────
+    if (info.value(QStringLiteral("_type")).toString() == QStringLiteral("playlist")) {
+        const QString playlistTitle = info.value(QStringLiteral("title"))
+                                          .toString(tr("Unknown Playlist"));
+        const QJsonArray entriesArray = info.value(QStringLiteral("entries")).toArray();
+
+        if (entriesArray.isEmpty()) {
+            emit errorOccurred(tr("Playlist is empty or all entries are unavailable."));
+            return;
+        }
+
+        QList<PlaylistEntry> entries;
+        int idx = 1;
+        for (const auto& entryVal : entriesArray) {
+            const QJsonObject entry = entryVal.toObject();
+            if (entry.isEmpty()) continue;
+
+            PlaylistEntry pe;
+            pe.index     = idx++;
+            pe.id        = entry.value(QStringLiteral("id")).toString();
+            pe.title     = entry.value(QStringLiteral("title")).toString(tr("Unknown"));
+            pe.thumbnail = entry.value(QStringLiteral("thumbnail")).toString();
+            pe.duration  = entry.value(QStringLiteral("duration")).toDouble(0);
+            pe.url       = entry.value(QStringLiteral("url")).toString();
+
+            if (pe.url.isEmpty() && !pe.id.isEmpty())
+                pe.url = QStringLiteral("https://www.youtube.com/watch?v=") + pe.id;
+
+            if (pe.url.isEmpty()) continue; // skip unresolvable entries
+
+            entries.append(pe);
+        }
+
+        if (entries.isEmpty()) {
+            emit errorOccurred(tr("No downloadable entries found in playlist."));
+            return;
+        }
+
+        emit playlistDetected(entries, playlistTitle);
+        return;
+    }
+
+    // ── Single video ──────────────────────────────────────────────────────
     const QString title     = info.value(QStringLiteral("title")).toString(QStringLiteral("Unknown"));
     const double  duration  = info.value(QStringLiteral("duration")).toDouble(0);
     const QString thumbnail = info.value(QStringLiteral("thumbnail")).toString();

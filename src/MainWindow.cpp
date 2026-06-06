@@ -43,6 +43,10 @@ MainWindow::MainWindow(QWidget* parent)
     // ── Connect DownloadManager ─────────────────────────────────────────
     connect(m_manager, &DownloadManager::metadataReady,
             this,      &MainWindow::onMetadataReady);
+    connect(m_manager, &DownloadManager::playlistDetected,
+            this,      &MainWindow::onPlaylistDetected);
+    connect(m_manager, &DownloadManager::playlistItemStarted,
+            this,      &MainWindow::onPlaylistItemStarted);
     connect(m_manager, &DownloadManager::downloadProgress,
             this,      &MainWindow::onDownloadProgress);
     connect(m_manager, &DownloadManager::conversionProgress,
@@ -355,8 +359,13 @@ void MainWindow::onFetchClicked()
 
     m_currentUrl = url;
     m_streams.clear();
+    m_isPlaylist = false;
+    m_playlistEntries.clear();
     m_cmbResolution->clear();
     m_grpInfo->setVisible(false);
+    m_grpInfo->setTitle(tr("VIDEO INFO"));
+    m_btnDownload->setText(QStringLiteral("⬇  Download"));
+    m_progressBar->setFormat(QStringLiteral("%p%"));
     m_lblStatus->setObjectName(QStringLiteral("lblStatus"));
     applyStylesheet();
 
@@ -366,26 +375,6 @@ void MainWindow::onFetchClicked()
 
 void MainWindow::onDownloadClicked()
 {
-    if (m_streams.isEmpty()) {
-        m_lblStatus->setText(tr("No streams available. Fetch a video first."));
-        return;
-    }
-
-    // Retrieve the real index into m_streams stored as combo userData
-    const int comboIdx = m_cmbResolution->currentIndex();
-    if (comboIdx < 0)
-        return;
-
-    const QVariant data = m_cmbResolution->currentData();
-    if (!data.isValid())
-        return;
-
-    const int realIdx = data.toInt();
-    if (realIdx < 0 || realIdx >= m_streams.size()) {
-        m_lblStatus->setText(tr("Invalid stream selection."));
-        return;
-    }
-
     const QString outDir = m_editOutputDir->text();
     if (outDir.isEmpty()) {
         QMessageBox::warning(this, tr("No Output Directory"),
@@ -400,6 +389,38 @@ void MainWindow::onDownloadClicked()
     };
     const QString format  = fmtKeys.value(m_cmbFormat->currentIndex(), QStringLiteral("mp4"));
     const QString bitrate = m_cmbBitrate->currentText();
+
+    if (m_isPlaylist) {
+        const QVariant data = m_cmbResolution->currentData();
+        const QString quality = data.isValid() ? data.toString() : QStringLiteral("best");
+
+        qDebug() << "[MainWindow] Playlist download: format=" << format
+                 << "quality=" << quality << "count=" << m_playlistEntries.size();
+
+        setUiState(QStringLiteral("downloading"));
+        m_manager->downloadPlaylist(m_playlistEntries, outDir, format, quality, bitrate);
+        return;
+    }
+
+    // ── Single video ─────────────────────────────────────────────────────
+    if (m_streams.isEmpty()) {
+        m_lblStatus->setText(tr("No streams available. Fetch a video first."));
+        return;
+    }
+
+    const int comboIdx = m_cmbResolution->currentIndex();
+    if (comboIdx < 0)
+        return;
+
+    const QVariant data = m_cmbResolution->currentData();
+    if (!data.isValid())
+        return;
+
+    const int realIdx = data.toInt();
+    if (realIdx < 0 || realIdx >= m_streams.size()) {
+        m_lblStatus->setText(tr("Invalid stream selection."));
+        return;
+    }
 
     qDebug() << "[MainWindow] Download: format=" << format
              << "stream=" << m_streams[realIdx].formatId
@@ -432,7 +453,20 @@ void MainWindow::onFormatChanged(int index)
     m_lblBitrate->setVisible(isAudio);
     m_cmbBitrate->setVisible(isAudio);
 
-    // Re-populate combo, storing the REAL index into m_streams as userData
+    if (m_isPlaylist) {
+        // In playlist mode, populate with quality presets (not stream-specific data)
+        if (!isAudio) {
+            m_cmbResolution->clear();
+            m_cmbResolution->addItem(tr("Best quality"), QStringLiteral("best"));
+            m_cmbResolution->addItem(tr("1080p"),        QStringLiteral("1080"));
+            m_cmbResolution->addItem(tr("720p"),         QStringLiteral("720"));
+            m_cmbResolution->addItem(tr("480p"),         QStringLiteral("480"));
+            m_cmbResolution->addItem(tr("360p"),         QStringLiteral("360"));
+        }
+        return;
+    }
+
+    // Single-video mode: filter streams by audio/video type
     if (!m_streams.isEmpty()) {
         m_cmbResolution->clear();
         for (int i = 0; i < m_streams.size(); ++i) {
@@ -449,6 +483,33 @@ void MainWindow::onFormatChanged(int index)
 // ─────────────────────────────────────────────────────────────────────────────
 // Slots — DownloadManager signals
 // ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::onPlaylistDetected(const QList<PlaylistEntry>& entries, const QString& title)
+{
+    m_isPlaylist      = true;
+    m_playlistEntries = entries;
+
+    // Update info card for playlist
+    m_grpInfo->setTitle(tr("PLAYLIST INFO"));
+    m_lblThumbnail->setPixmap(QPixmap());
+    m_lblThumbnail->setText(QStringLiteral("🎵"));
+    m_lblVideoTitle->setText(title);
+    m_lblDuration->setText(tr("%1 videos").arg(entries.size()));
+    m_grpInfo->setVisible(true);
+
+    // Populate resolution combo with quality presets
+    onFormatChanged(m_cmbFormat->currentIndex());
+
+    m_btnDownload->setText(tr("⬇  Download (%1)").arg(entries.size()));
+    setUiState(QStringLiteral("idle"));
+}
+
+void MainWindow::onPlaylistItemStarted(int current, int total, const QString& currentTitle)
+{
+    m_progressBar->setFormat(tr("Video %1/%2: %p%").arg(current).arg(total));
+    m_lblStatus->setObjectName(QStringLiteral("lblStatus"));
+    m_lblStatus->setText(tr("Downloading %1/%2: %3").arg(current).arg(total).arg(currentTitle));
+}
 
 void MainWindow::onMetadataReady(const QList<StreamInfo>& streams,
                                   const QString& title,
@@ -507,9 +568,14 @@ void MainWindow::onFinished(const QString& filePath)
 {
     setUiState(QStringLiteral("idle"));
     m_progressBar->setValue(100);
+    m_progressBar->setFormat(QStringLiteral("%p%"));
+    m_btnDownload->setText(QStringLiteral("⬇  Download"));
 
     m_lblStatus->setObjectName(QStringLiteral("lblSuccess"));
-    m_lblStatus->setText(tr("✅  Saved: %1").arg(filePath));
+    if (QFileInfo(filePath).isDir())
+        m_lblStatus->setText(tr("✅  Playlist saved to: %1").arg(filePath));
+    else
+        m_lblStatus->setText(tr("✅  Saved: %1").arg(filePath));
     applyStylesheet();
 
     saveSettings();
