@@ -31,11 +31,18 @@ The application is structured into two main layers:
 `yt-dlp` is invoked as an external command for fetching video metadata (`--dump-json`) and downloading streams.
 
 ## Prerequisites
-Ensure the following dependencies are installed before proceeding with compilation:
+
+The dependencies fall into two groups: those needed to **build** the application, and those needed to **run** it. Install both before proceeding.
 
 ### Runtime dependencies
-- yt-dlp
-- ffmpeg
+
+These external tools are invoked by the application at runtime and must be present on your `PATH`. The app checks for them on startup and shows a dependency dialog if any are missing.
+
+| Dependency | Debian / Ubuntu | Fedora | Arch Linux | openSUSE | Notes |
+|------------|-----------------|--------|------------|----------|-------|
+| yt-dlp | `yt-dlp` | `yt-dlp` | `yt-dlp` | `yt-dlp` | Keep it up to date (`yt-dlp -U` or your package manager) — YouTube changes often break older releases. |
+| ffmpeg | `ffmpeg` | `ffmpeg` | `ffmpeg` | `ffmpeg` | Used for remuxing/conversion to the final container. |
+| git | `git` | `git` | `git` | `git` | Only needed for the `git pull` step of the install script. |
 
 ### Build dependencies
 
@@ -47,32 +54,38 @@ Ensure the following dependencies are installed before proceeding with compilati
 
 ## Installation and Execution
 
-### Precompiled Binaries
-For users who prefer not to build from source, the final executable is available in the **Releases** section of this repository.
+### Quick install (recommended)
 
-### Building from Source
-To manually compile the application:
+After installing the build and runtime dependencies above, clone the repository and run the install script. It performs the whole pipeline in one step — **updates the source (`git pull`), compiles, and installs** the binary, desktop entry, and icon system-wide.
 
 ```bash
-# Clone the repository
 git clone https://github.com/Ricky182771/EzYTDownloader.git
 cd EzYTDownloader
+bash scripts/install.sh
+```
 
-# Create the build directory
+> Run it as a **normal user** — *not* with `sudo`. The build must not run as root; the script asks for `sudo` by itself only for the system install steps.
+
+Re-running `bash scripts/install.sh` later pulls the latest changes, rebuilds, and reinstalls — the simplest way to stay on the newest version.
+
+Useful flags:
+
+| Flag | Effect |
+|------|--------|
+| `--no-pull`  | Skip `git pull`; build and install the current checkout as-is. |
+| `--no-build` | Skip compilation; install the binary already present in `build/`. |
+
+### Building from Source (manual)
+
+If you prefer to compile by hand instead of using the script:
+
+```bash
 mkdir -p build && cd build
-
-# Configure and compile
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ```
 
-### System Installation
-If you downloaded only the binary, you can install to your system by using the provided install script to register the binary, desktop entry, and application icon system-wide. **This step requires `sudo`.**
-
-```bash
-# Install (binary → /usr/local/bin, desktop entry, icon)
-sudo bash scripts/install.sh
-```
+The compiled binary is then at `build/EzYTDownloader`. You can run it directly, or install it system-wide with `bash scripts/install.sh --no-pull --no-build`.
 
 You can then launch **EzYTDownloader** from your application menu or directly from the terminal.
 
