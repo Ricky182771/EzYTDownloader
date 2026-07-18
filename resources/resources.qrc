@@ -2,6 +2,8 @@
 <RCC version="1.0">
     <qresource prefix="/">
         <file>icons/app_icon.png</file>
+        <file>icons/chevron-down.svg</file>
+        <file>icons/check.svg</file>
         <file>style/dark_theme.qss</file>
     </qresource>
 </RCC>

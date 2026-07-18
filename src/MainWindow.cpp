@@ -23,6 +23,9 @@
 #include <QFrame>
 #include <QSpacerItem>
 #include <QGraphicsDropShadowEffect>
+#include <QGraphicsOpacityEffect>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QDebug>
@@ -31,6 +34,7 @@
 #include <QPixmap>
 #include <QPalette>
 #include <QAbstractItemView>
+#include <QStyle>
 
 // On Linux with compositing the combo popup window inherits the ARGB visual
 // used for rgba() QSS backgrounds and appears transparent.  Overriding
@@ -90,6 +94,15 @@ MainWindow::MainWindow(QWidget* parent)
             this,      &MainWindow::onStatus);
 
     setUiState(QStringLiteral("idle"));
+
+    // Gentle fade-in of the whole window on first show.
+    setWindowOpacity(0.0);
+    auto* fadeIn = new QPropertyAnimation(this, "windowOpacity", this);
+    fadeIn->setDuration(260);
+    fadeIn->setStartValue(0.0);
+    fadeIn->setEndValue(1.0);
+    fadeIn->setEasingCurve(QEasingCurve::OutCubic);
+    fadeIn->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
 MainWindow::~MainWindow()
@@ -104,21 +117,22 @@ MainWindow::~MainWindow()
 void MainWindow::setupUi()
 {
     setWindowTitle(QStringLiteral("Easy YouTube Video Downloader"));
-    setMinimumSize(640, 520);
+    setMinimumSize(760, 560);
 
     auto* central = new QWidget(this);
+    central->setObjectName(QStringLiteral("centralWidget"));
     setCentralWidget(central);
 
     auto* root = new QVBoxLayout(central);
-    root->setSpacing(12);
-    root->setContentsMargins(24, 20, 24, 20);
+    root->setSpacing(14);
+    root->setContentsMargins(24, 24, 24, 24);
 
     // ─── Header ─────────────────────────────────────────────────────────
     m_lblTitle = new QLabel(QStringLiteral("Easy YouTube Video Downloader"));
-    m_lblTitle->setObjectName(QStringLiteral("lblTitle"));
+    m_lblTitle->setObjectName(QStringLiteral("titleLabel"));
 
     m_lblSubtitle = new QLabel(QStringLiteral("Download YouTube videos & audio with ease"));
-    m_lblSubtitle->setObjectName(QStringLiteral("lblSubtitle"));
+    m_lblSubtitle->setObjectName(QStringLiteral("subtitleLabel"));
 
     root->addWidget(m_lblTitle);
     root->addWidget(m_lblSubtitle);
@@ -140,10 +154,11 @@ void MainWindow::setupUi()
     m_btnPaste = new QPushButton(QStringLiteral("📋"));
     m_btnPaste->setToolTip(tr("Paste from clipboard"));
     m_btnPaste->setFixedSize(38, 38);
-    m_btnPaste->setObjectName(QStringLiteral("btnBrowse")); // reuse subtle style
+    m_btnPaste->setObjectName(QStringLiteral("pasteButton"));
     connect(m_btnPaste, &QPushButton::clicked, this, &MainWindow::onPasteClicked);
 
     m_btnFetch = new QPushButton(QStringLiteral("Fetch"));
+    m_btnFetch->setObjectName(QStringLiteral("fetchButton"));
     m_btnFetch->setFixedWidth(90);
     connect(m_btnFetch, &QPushButton::clicked, this, &MainWindow::onFetchClicked);
 
@@ -159,11 +174,9 @@ void MainWindow::setupUi()
 
     // Thumbnail (left side)
     m_lblThumbnail = new QLabel;
-    m_lblThumbnail->setObjectName(QStringLiteral("lblThumbnail"));
+    m_lblThumbnail->setObjectName(QStringLiteral("thumbnailLabel"));
     m_lblThumbnail->setFixedSize(160, 90);
     m_lblThumbnail->setAlignment(Qt::AlignCenter);
-    m_lblThumbnail->setStyleSheet(
-        QStringLiteral("background: rgba(255,255,255,0.05); border-radius: 6px;"));
     m_lblThumbnail->setText(QStringLiteral("🎬"));
     m_lblThumbnail->setScaledContents(false);
 
@@ -172,7 +185,7 @@ void MainWindow::setupUi()
     infoText->setSpacing(4);
 
     m_lblVideoTitle = new QLabel(QStringLiteral("—"));
-    m_lblVideoTitle->setObjectName(QStringLiteral("lblVideoTitle"));
+    m_lblVideoTitle->setObjectName(QStringLiteral("videoTitleLabel"));
     m_lblVideoTitle->setWordWrap(true);
 
     m_lblDuration = new QLabel(QStringLiteral("Duration: —"));
@@ -248,7 +261,7 @@ void MainWindow::setupUi()
     m_editOutputDir->setReadOnly(true);
 
     m_btnBrowse = new QPushButton(QStringLiteral("Browse…"));
-    m_btnBrowse->setObjectName(QStringLiteral("btnBrowse"));
+    m_btnBrowse->setObjectName(QStringLiteral("browseButton"));
     m_btnBrowse->setFixedWidth(90);
     connect(m_btnBrowse, &QPushButton::clicked, this, &MainWindow::onBrowseClicked);
 
@@ -266,7 +279,7 @@ void MainWindow::setupUi()
     root->addWidget(m_progressBar);
 
     m_lblStatus = new QLabel(QStringLiteral("Ready"));
-    m_lblStatus->setObjectName(QStringLiteral("lblStatus"));
+    m_lblStatus->setObjectName(QStringLiteral("statusLabel"));
     root->addWidget(m_lblStatus);
 
     // ─── Parallel progress table (playlist only) ────────────────────────
@@ -275,7 +288,7 @@ void MainWindow::setupUi()
     progLayout->setSpacing(8);
 
     m_lblParallelInfo = new QLabel(tr("Active: 0  |  Queued: 0"));
-    m_lblParallelInfo->setObjectName(QStringLiteral("lblStatus"));
+    m_lblParallelInfo->setObjectName(QStringLiteral("statusLabel"));
     progLayout->addWidget(m_lblParallelInfo);
 
     m_tableProgress = new QTableWidget(0, 4);
@@ -303,12 +316,13 @@ void MainWindow::setupUi()
     btnRow->addStretch();
 
     m_btnCancel = new QPushButton(QStringLiteral("Cancel"));
-    m_btnCancel->setObjectName(QStringLiteral("btnCancel"));
+    m_btnCancel->setObjectName(QStringLiteral("cancelButton"));
     m_btnCancel->setFixedWidth(100);
     connect(m_btnCancel, &QPushButton::clicked, this, &MainWindow::onCancelClicked);
     btnRow->addWidget(m_btnCancel);
 
     m_btnDownload = new QPushButton(QStringLiteral("⬇  Download"));
+    m_btnDownload->setObjectName(QStringLiteral("downloadButton"));
     m_btnDownload->setFixedWidth(150);
     connect(m_btnDownload, &QPushButton::clicked, this, &MainWindow::onDownloadClicked);
     btnRow->addWidget(m_btnDownload);
@@ -328,6 +342,52 @@ void MainWindow::applyStylesheet()
     } else {
         qWarning() << "[MainWindow] Could not load dark_theme.qss";
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Animation helpers (QSS has no transitions, so animate via QPropertyAnimation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::fadeInWidget(QWidget* w, int durationMs)
+{
+    if (!w) return;
+
+    auto* effect = new QGraphicsOpacityEffect(w);
+    w->setGraphicsEffect(effect); // widget takes ownership (drops any previous effect)
+
+    auto* anim = new QPropertyAnimation(effect, "opacity", w);
+    anim->setDuration(durationMs);
+    anim->setStartValue(0.0);
+    anim->setEndValue(1.0);
+    anim->setEasingCurve(QEasingCurve::OutCubic);
+
+    // Drop the effect once done so it doesn't interfere with child repaints.
+    connect(anim, &QPropertyAnimation::finished, w, [w]() {
+        w->setGraphicsEffect(nullptr);
+    });
+
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void MainWindow::setProgressAnimated(int value)
+{
+    if (!m_progressAnim) {
+        m_progressAnim = new QPropertyAnimation(m_progressBar, "value", this);
+        m_progressAnim->setDuration(180);
+        m_progressAnim->setEasingCurve(QEasingCurve::OutCubic);
+    }
+
+    // Don't animate backwards jumps to 0 (resets) — snap those instantly.
+    if (value <= 0) {
+        m_progressAnim->stop();
+        m_progressBar->setValue(value);
+        return;
+    }
+
+    m_progressAnim->stop();
+    m_progressAnim->setStartValue(m_progressBar->value());
+    m_progressAnim->setEndValue(value);
+    m_progressAnim->start();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -412,6 +472,7 @@ void MainWindow::setUiState(const QString& state)
     m_btnCancel->setEnabled(busy);
 
     if (idle) {
+        if (m_progressAnim) m_progressAnim->stop();
         m_progressBar->setValue(0);
     }
 
@@ -419,6 +480,17 @@ void MainWindow::setUiState(const QString& state)
         m_progressBar->setFormat(QStringLiteral("Converting: %p%"));
     } else {
         m_progressBar->setFormat(QStringLiteral("%p%"));
+    }
+
+    // Switch the progress bar to the green→cyan "conversion" gradient while
+    // converting, then back to the default violet→pink one.  Repolish only
+    // this widget so we don't re-parse the whole stylesheet on every tick.
+    const QString barName = converting ? QStringLiteral("conversionProgressBar")
+                                       : QString();
+    if (m_progressBar->objectName() != barName) {
+        m_progressBar->setObjectName(barName);
+        m_progressBar->style()->unpolish(m_progressBar);
+        m_progressBar->style()->polish(m_progressBar);
     }
 }
 
@@ -438,7 +510,7 @@ void MainWindow::onFetchClicked()
     const QString url = m_editUrl->text().trimmed();
     if (url.isEmpty()) {
         m_lblStatus->setText(tr("Please enter a YouTube URL."));
-        m_lblStatus->setObjectName(QStringLiteral("lblError"));
+        m_lblStatus->setObjectName(QStringLiteral("errorLabel"));
         applyStylesheet(); // re-apply to pick up object name change
         return;
     }
@@ -457,7 +529,7 @@ void MainWindow::onFetchClicked()
     m_grpInfo->setTitle(tr("VIDEO INFO"));
     m_btnDownload->setText(QStringLiteral("⬇  Download"));
     m_progressBar->setFormat(QStringLiteral("%p%"));
-    m_lblStatus->setObjectName(QStringLiteral("lblStatus"));
+    m_lblStatus->setObjectName(QStringLiteral("statusLabel"));
     applyStylesheet();
 
     setUiState(QStringLiteral("fetching"));
@@ -495,6 +567,7 @@ void MainWindow::onDownloadClicked()
 
         buildProgressTable();
         m_grpProgress->setVisible(true);
+        fadeInWidget(m_grpProgress);
         m_progressBar->setFormat(tr("Overall: %p%"));
         m_progressBar->setValue(0);
 
@@ -621,6 +694,7 @@ void MainWindow::onPlaylistDetected(const QList<PlaylistEntry>& entries, const Q
     m_lblVideoTitle->setText(title);
     m_lblDuration->setText(tr("%1 videos").arg(entries.size()));
     m_grpInfo->setVisible(true);
+    fadeInWidget(m_grpInfo);
 
     // Populate resolution combo with quality presets
     onFormatChanged(m_cmbFormat->currentIndex());
@@ -738,7 +812,7 @@ void MainWindow::onPlaylistQueueStatus(int active, int queued, int processed, in
             .arg(active).arg(queued).arg(processed).arg(total));
 
     if (total > 0)
-        m_progressBar->setValue(processed * 100 / total);
+        setProgressAnimated(processed * 100 / total);
 }
 
 void MainWindow::onMetadataReady(const QList<StreamInfo>& streams,
@@ -760,6 +834,7 @@ void MainWindow::onMetadataReady(const QList<StreamInfo>& streams,
         .arg(mins, 2, 10, QLatin1Char('0'))
         .arg(secs, 2, 10, QLatin1Char('0')));
     m_grpInfo->setVisible(true);
+    fadeInWidget(m_grpInfo);
 
     // Populate resolution combo based on current format
     onFormatChanged(m_cmbFormat->currentIndex());
@@ -778,7 +853,7 @@ void MainWindow::onMetadataReady(const QList<StreamInfo>& streams,
 
 void MainWindow::onDownloadProgress(int percent, const QString& speed, const QString& eta)
 {
-    m_progressBar->setValue(percent);
+    setProgressAnimated(percent);
 
     QString statusText = tr("Downloading… %1%").arg(percent);
     if (!speed.isEmpty()) statusText += QStringLiteral("  •  ") + speed;
@@ -790,18 +865,18 @@ void MainWindow::onDownloadProgress(int percent, const QString& speed, const QSt
 void MainWindow::onConversionProgress(int percent)
 {
     setUiState(QStringLiteral("converting"));
-    m_progressBar->setValue(percent);
+    setProgressAnimated(percent);
     m_lblStatus->setText(tr("Converting… %1%").arg(percent));
 }
 
 void MainWindow::onFinished(const QString& filePath)
 {
     setUiState(QStringLiteral("idle"));
-    m_progressBar->setValue(100);
+    setProgressAnimated(100);
     m_progressBar->setFormat(QStringLiteral("%p%"));
     m_btnDownload->setText(QStringLiteral("⬇  Download"));
 
-    m_lblStatus->setObjectName(QStringLiteral("lblSuccess"));
+    m_lblStatus->setObjectName(QStringLiteral("successLabel"));
     if (QFileInfo(filePath).isDir())
         m_lblStatus->setText(tr("✅  Playlist saved to: %1").arg(filePath));
     else
@@ -815,7 +890,7 @@ void MainWindow::onError(const QString& error)
 {
     setUiState(QStringLiteral("idle"));
 
-    m_lblStatus->setObjectName(QStringLiteral("lblError"));
+    m_lblStatus->setObjectName(QStringLiteral("errorLabel"));
     m_lblStatus->setText(tr("❌  %1").arg(error));
     applyStylesheet();
 
@@ -824,7 +899,7 @@ void MainWindow::onError(const QString& error)
 
 void MainWindow::onStatus(const QString& msg)
 {
-    m_lblStatus->setObjectName(QStringLiteral("lblStatus"));
+    m_lblStatus->setObjectName(QStringLiteral("statusLabel"));
     m_lblStatus->setText(msg);
     // Don't re-apply stylesheet for normal status messages to avoid flicker
 }

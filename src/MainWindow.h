@@ -16,6 +16,7 @@ class QGroupBox;
 class QTableWidget;
 class DownloadManager;
 class QNetworkAccessManager;
+class QPropertyAnimation;
 
 /// The main application window — URL input, format/resolution/bitrate selectors,
 /// progress display, and download controls.
@@ -65,6 +66,10 @@ private:
     void buildProgressTable();                 // one row per playlist entry
     int  rowForUrl(const QString& url) const;  // -1 if unknown
 
+    // ── Animation helpers ────────────────────────────────────────────────
+    void fadeInWidget(QWidget* w, int durationMs = 220); // smooth reveal
+    void setProgressAnimated(int value);                 // interpolate the bar
+
     // ── Widgets ─────────────────────────────────────────────────────────
     // Header
     QLabel*      m_lblTitle      = nullptr;
@@ -112,8 +117,9 @@ private:
     QPushButton* m_btnCancel     = nullptr;
 
     // ── Logic ───────────────────────────────────────────────────────────
-    DownloadManager*       m_manager    = nullptr;
-    QNetworkAccessManager* m_netManager = nullptr;
+    DownloadManager*       m_manager      = nullptr;
+    QNetworkAccessManager* m_netManager   = nullptr;
+    QPropertyAnimation*    m_progressAnim = nullptr; // smooth main progress bar
     QList<StreamInfo>      m_streams;
     QString                m_currentUrl;
     double                 m_currentDuration = 0.0;
