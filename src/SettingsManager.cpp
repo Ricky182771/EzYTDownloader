@@ -83,6 +83,11 @@ QString SettingsManager::lastBitrate() const
     return m_data.value(QStringLiteral("lastBitrate")).toString(QStringLiteral("320k"));
 }
 
+int SettingsManager::parallelDownloads() const
+{
+    return qBound(1, m_data.value(QStringLiteral("parallelDownloads")).toInt(3), 5);
+}
+
 QSize SettingsManager::windowSize() const
 {
     const int w = m_data.value(QStringLiteral("windowWidth")).toInt(680);
@@ -118,6 +123,11 @@ void SettingsManager::setLastResolution(const QString& res)
 void SettingsManager::setLastBitrate(const QString& br)
 {
     m_data[QStringLiteral("lastBitrate")] = br;
+}
+
+void SettingsManager::setParallelDownloads(int count)
+{
+    m_data[QStringLiteral("parallelDownloads")] = qBound(1, count, 5);
 }
 
 void SettingsManager::setWindowSize(const QSize& size)

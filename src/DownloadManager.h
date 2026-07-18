@@ -7,11 +7,13 @@
 
 class FetchWorker;
 class ConvertWorker;
+class ParallelDownloadManager;
 
 /// Orchestrates the full download pipeline for single videos and playlists.
 ///
 /// Single video:  fetch metadata → download stream → convert/remux via ffmpeg
-/// Playlist:      fetch entry list → download each item sequentially via yt-dlp post-processing
+/// Playlist:      fetch entry list → delegate to ParallelDownloadManager, which
+///                downloads up to N items at once via yt-dlp post-processing
 class DownloadManager : public QObject {
     Q_OBJECT
 
@@ -29,13 +31,15 @@ public:
                        const QString& format,    // "mp4", "mkv", "mp3"
                        const QString& bitrate);  // e.g. "320k" (mp3 only)
 
-    /// Playlist: Download all entries sequentially using yt-dlp format selectors.
+    /// Playlist: Download all entries using yt-dlp format selectors.
     /// quality: "best", "1080", "720", "480", "360"
+    /// maxParallel: number of simultaneous downloads (1 = sequential).
     void downloadPlaylist(const QList<PlaylistEntry>& entries,
                           const QString& outputDir,
                           const QString& format,
                           const QString& quality,
-                          const QString& bitrate);
+                          const QString& bitrate,
+                          int maxParallel = 1);
 
     /// Abort any running operation.
     void cancel();
@@ -50,12 +54,16 @@ signals:
                        const QString& thumbnail);
     void playlistDetected(const QList<PlaylistEntry>& entries, const QString& title);
 
-    // ── Download phase ──────────────────────────────────────────────────
+    // ── Download phase (single video) ───────────────────────────────────
     void downloadProgress(int percent, const QString& speed, const QString& eta);
     void statusMessage(const QString& msg);
 
-    // ── Playlist progress ───────────────────────────────────────────────
-    void playlistItemStarted(int current, int total, const QString& currentTitle);
+    // ── Playlist progress (parallel) ────────────────────────────────────
+    void playlistItemStarted(const QString& url, const QString& title, int index, int total);
+    void playlistItemProgress(const QString& url, int percent, const QString& speed, const QString& eta);
+    void playlistItemFinished(const QString& url, const QString& title, bool skipped);
+    void playlistItemFailed(const QString& url, const QString& title, const QString& error);
+    void playlistQueueStatus(int active, int queued, int processed, int total);
 
     // ── Conversion phase (single video only) ────────────────────────────
     void conversionProgress(int percent);
@@ -76,9 +84,14 @@ private slots:
     void onConversionFinished(const QString& finalPath);
     void onError(const QString& msg);
 
+    // ── Parallel manager relays ─────────────────────────────────────────
+    void onPlaylistItemStarted(const QString& url, const QString& title, int index, int total);
+    void onPlaylistAllFinished(const QString& outputDir, int completed, int failed);
+
 private:
-    FetchWorker*   m_fetch   = nullptr;
-    ConvertWorker* m_convert = nullptr;
+    FetchWorker*             m_fetch    = nullptr;
+    ConvertWorker*           m_convert  = nullptr;
+    ParallelDownloadManager* m_parallel = nullptr;
 
     // ── Single-video state ───────────────────────────────────────────────
     QString    m_url;
@@ -89,16 +102,6 @@ private:
     QString    m_tempPath;
     bool       m_cancelled = false;
 
-    // ── Playlist state ───────────────────────────────────────────────────
-    bool                 m_playlistMode  = false;
-    QList<PlaylistEntry> m_playlistQueue;
-    int                  m_playlistIndex = 0;
-    QString              m_playlistOutputDir;
-    QString              m_playlistFormat;
-    QString              m_playlistQuality;
-    QString              m_playlistBitrate;
-
     void cleanupTemp();
     QString buildFinalPath() const;
-    void downloadNextPlaylistItem();
 };

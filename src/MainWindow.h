@@ -2,15 +2,18 @@
 
 #include <QMainWindow>
 #include <QList>
+#include <QHash>
 #include "StreamInfo.h"
 #include "PlaylistEntry.h"
 
 class QLineEdit;
 class QComboBox;
+class QSpinBox;
 class QProgressBar;
 class QLabel;
 class QPushButton;
 class QGroupBox;
+class QTableWidget;
 class DownloadManager;
 class QNetworkAccessManager;
 
@@ -41,7 +44,11 @@ private slots:
                          double duration,
                          const QString& thumbnail);
     void onPlaylistDetected(const QList<PlaylistEntry>& entries, const QString& title);
-    void onPlaylistItemStarted(int current, int total, const QString& currentTitle);
+    void onPlaylistItemStarted(const QString& url, const QString& title, int index, int total);
+    void onPlaylistItemProgress(const QString& url, int percent, const QString& speed, const QString& eta);
+    void onPlaylistItemFinished(const QString& url, const QString& title, bool skipped);
+    void onPlaylistItemFailed(const QString& url, const QString& title, const QString& error);
+    void onPlaylistQueueStatus(int active, int queued, int processed, int total);
     void onDownloadProgress(int percent, const QString& speed, const QString& eta);
     void onConversionProgress(int percent);
     void onFinished(const QString& filePath);
@@ -55,6 +62,8 @@ private:
     void saveSettings();
     void setUiState(const QString& state); // "idle", "fetching", "downloading", "converting"
     void loadThumbnail(const QString& url);
+    void buildProgressTable();                 // one row per playlist entry
+    int  rowForUrl(const QString& url) const;  // -1 if unknown
 
     // ── Widgets ─────────────────────────────────────────────────────────
     // Header
@@ -81,6 +90,10 @@ private:
     QLabel*      m_lblResolution = nullptr;
     QLabel*      m_lblBitrate    = nullptr;
 
+    // Parallel downloads (playlist only)
+    QLabel*      m_lblParallel   = nullptr;
+    QSpinBox*    m_spinParallel  = nullptr;
+
     // Output
     QLineEdit*   m_editOutputDir = nullptr;
     QPushButton* m_btnBrowse     = nullptr;
@@ -88,6 +101,11 @@ private:
     // Progress
     QProgressBar* m_progressBar  = nullptr;
     QLabel*       m_lblStatus    = nullptr;
+
+    // Parallel download progress table (playlist only)
+    QGroupBox*    m_grpProgress  = nullptr;
+    QLabel*       m_lblParallelInfo = nullptr;
+    QTableWidget* m_tableProgress   = nullptr;
 
     // Actions
     QPushButton* m_btnDownload   = nullptr;
@@ -103,4 +121,5 @@ private:
     // ── Playlist state ───────────────────────────────────────────────────
     bool                 m_isPlaylist = false;
     QList<PlaylistEntry> m_playlistEntries;
+    QHash<QString, int>  m_rowForUrl;   // playlist URL → progress-table row
 };

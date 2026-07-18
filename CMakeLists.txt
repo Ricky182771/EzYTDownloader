@@ -36,6 +36,8 @@ set(SOURCES
     src/DependencyChecker.cpp
     src/DependencyDialog.cpp
     src/DownloadManager.cpp
+    src/ParallelDownloadManager.cpp
+    src/DownloadWorker.cpp
     src/FetchWorker.cpp
     src/ConvertWorker.cpp
     src/SettingsManager.cpp
@@ -48,6 +50,8 @@ set(HEADERS
     src/DependencyChecker.h
     src/DependencyDialog.h
     src/DownloadManager.h
+    src/ParallelDownloadManager.h
+    src/DownloadWorker.h
     src/FetchWorker.h
     src/ConvertWorker.h
     src/SettingsManager.h

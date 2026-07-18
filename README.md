@@ -14,6 +14,8 @@ EzYTDownloader provides a graphical interface for stream extraction and media co
 
 **Audio Extraction:** Direct conversion to MPEG (MP3) format.
 
+**Playlists & Parallel Downloads:** Detects YouTube playlists automatically and downloads their entries concurrently (1–5 simultaneous downloads, configurable), with a per-item progress table showing title, progress, speed, and ETA.
+
 **Asynchronous Processing:** Non-blocking interface with real-time tracking of progress, speed, and estimated time of arrival (ETA).
 
 **Zero Python dependency:** Communicates with `yt-dlp` directly via its CLI, keeping the dependency footprint minimal.

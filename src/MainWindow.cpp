@@ -7,10 +7,13 @@
 #include <QGridLayout>
 #include <QLineEdit>
 #include <QComboBox>
+#include <QSpinBox>
 #include <QProgressBar>
 #include <QLabel>
 #include <QPushButton>
 #include <QGroupBox>
+#include <QTableWidget>
+#include <QHeaderView>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QClipboard>
@@ -67,6 +70,14 @@ MainWindow::MainWindow(QWidget* parent)
             this,      &MainWindow::onPlaylistDetected);
     connect(m_manager, &DownloadManager::playlistItemStarted,
             this,      &MainWindow::onPlaylistItemStarted);
+    connect(m_manager, &DownloadManager::playlistItemProgress,
+            this,      &MainWindow::onPlaylistItemProgress);
+    connect(m_manager, &DownloadManager::playlistItemFinished,
+            this,      &MainWindow::onPlaylistItemFinished);
+    connect(m_manager, &DownloadManager::playlistItemFailed,
+            this,      &MainWindow::onPlaylistItemFailed);
+    connect(m_manager, &DownloadManager::playlistQueueStatus,
+            this,      &MainWindow::onPlaylistQueueStatus);
     connect(m_manager, &DownloadManager::downloadProgress,
             this,      &MainWindow::onDownloadProgress);
     connect(m_manager, &DownloadManager::conversionProgress,
@@ -213,6 +224,18 @@ void MainWindow::setupUi()
     optGrid->addWidget(m_lblBitrate, 2, 0);
     optGrid->addWidget(m_cmbBitrate, 2, 1);
 
+    // Parallel downloads (playlist only) — hidden until a playlist is detected
+    m_lblParallel = new QLabel(tr("Parallel downloads"));
+    m_spinParallel = new QSpinBox;
+    m_spinParallel->setMinimum(1);
+    m_spinParallel->setMaximum(5);
+    m_spinParallel->setValue(3);
+    m_spinParallel->setToolTip(tr("Number of simultaneous downloads (1 = sequential)"));
+    m_lblParallel->setVisible(false);
+    m_spinParallel->setVisible(false);
+    optGrid->addWidget(m_lblParallel,  3, 0);
+    optGrid->addWidget(m_spinParallel, 3, 1);
+
     optGrid->setColumnStretch(1, 1);
     root->addWidget(m_grpOptions);
 
@@ -245,6 +268,34 @@ void MainWindow::setupUi()
     m_lblStatus = new QLabel(QStringLiteral("Ready"));
     m_lblStatus->setObjectName(QStringLiteral("lblStatus"));
     root->addWidget(m_lblStatus);
+
+    // ─── Parallel progress table (playlist only) ────────────────────────
+    m_grpProgress = new QGroupBox(tr("DOWNLOAD QUEUE"));
+    auto* progLayout = new QVBoxLayout(m_grpProgress);
+    progLayout->setSpacing(8);
+
+    m_lblParallelInfo = new QLabel(tr("Active: 0  |  Queued: 0"));
+    m_lblParallelInfo->setObjectName(QStringLiteral("lblStatus"));
+    progLayout->addWidget(m_lblParallelInfo);
+
+    m_tableProgress = new QTableWidget(0, 4);
+    m_tableProgress->setHorizontalHeaderLabels(
+        {tr("Title"), tr("Progress"), tr("Speed"), tr("ETA")});
+    m_tableProgress->verticalHeader()->setVisible(false);
+    m_tableProgress->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_tableProgress->setSelectionMode(QAbstractItemView::NoSelection);
+    m_tableProgress->setFocusPolicy(Qt::NoFocus);
+    m_tableProgress->horizontalHeader()->setStretchLastSection(false);
+    m_tableProgress->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    m_tableProgress->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
+    m_tableProgress->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_tableProgress->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_tableProgress->setColumnWidth(1, 160);
+    m_tableProgress->setMinimumHeight(160);
+    progLayout->addWidget(m_tableProgress);
+
+    m_grpProgress->setVisible(false);
+    root->addWidget(m_grpProgress);
 
     // ─── Action Buttons ─────────────────────────────────────────────────
     auto* btnRow = new QHBoxLayout;
@@ -300,6 +351,8 @@ void MainWindow::loadSettings()
     const int brIdx = m_cmbBitrate->findText(s.lastBitrate());
     if (brIdx >= 0) m_cmbBitrate->setCurrentIndex(brIdx);
 
+    m_spinParallel->setValue(s.parallelDownloads());
+
     const QSize sz = s.windowSize();
     resize(sz);
 
@@ -327,6 +380,7 @@ void MainWindow::saveSettings()
         s.setLastResolution(m_cmbResolution->currentText());
 
     s.setLastBitrate(m_cmbBitrate->currentText());
+    s.setParallelDownloads(m_spinParallel->value());
     s.setWindowSize(size());
     s.setWindowPos(pos());
     s.save();
@@ -350,6 +404,7 @@ void MainWindow::setUiState(const QString& state)
     m_cmbFormat->setEnabled(!busy);
     m_cmbResolution->setEnabled(!busy && m_cmbResolution->count() > 0);
     m_cmbBitrate->setEnabled(!busy);
+    m_spinParallel->setEnabled(!busy);
     m_btnBrowse->setEnabled(!busy);
     const bool hasContent = m_isPlaylist ? !m_playlistEntries.isEmpty()
                                                   : m_cmbResolution->count() > 0;
@@ -392,7 +447,12 @@ void MainWindow::onFetchClicked()
     m_streams.clear();
     m_isPlaylist = false;
     m_playlistEntries.clear();
+    m_rowForUrl.clear();
     m_cmbResolution->clear();
+    m_lblParallel->setVisible(false);
+    m_spinParallel->setVisible(false);
+    m_grpProgress->setVisible(false);
+    m_tableProgress->setRowCount(0);
     m_grpInfo->setVisible(false);
     m_grpInfo->setTitle(tr("VIDEO INFO"));
     m_btnDownload->setText(QStringLiteral("⬇  Download"));
@@ -427,12 +487,19 @@ void MainWindow::onDownloadClicked()
     if (m_isPlaylist) {
         const QVariant data = m_cmbResolution->currentData();
         const QString quality = data.isValid() ? data.toString() : QStringLiteral("best");
+        const int maxParallel = m_spinParallel->value();
 
         qDebug() << "[MainWindow] Playlist download: format=" << format
-                 << "quality=" << quality << "count=" << m_playlistEntries.size();
+                 << "quality=" << quality << "count=" << m_playlistEntries.size()
+                 << "parallel=" << maxParallel;
+
+        buildProgressTable();
+        m_grpProgress->setVisible(true);
+        m_progressBar->setFormat(tr("Overall: %p%"));
+        m_progressBar->setValue(0);
 
         setUiState(QStringLiteral("downloading"));
-        m_manager->downloadPlaylist(m_playlistEntries, outDir, format, quality, bitrate);
+        m_manager->downloadPlaylist(m_playlistEntries, outDir, format, quality, bitrate, maxParallel);
         return;
     }
 
@@ -558,15 +625,120 @@ void MainWindow::onPlaylistDetected(const QList<PlaylistEntry>& entries, const Q
     // Populate resolution combo with quality presets
     onFormatChanged(m_cmbFormat->currentIndex());
 
+    // Parallel-download control is only meaningful for playlists
+    m_lblParallel->setVisible(true);
+    m_spinParallel->setVisible(true);
+
     m_btnDownload->setText(tr("⬇  Download (%1)").arg(entries.size()));
     setUiState(QStringLiteral("idle"));
 }
 
-void MainWindow::onPlaylistItemStarted(int current, int total, const QString& currentTitle)
+// ─────────────────────────────────────────────────────────────────────────────
+// Parallel playlist progress table
+// ─────────────────────────────────────────────────────────────────────────────
+
+void MainWindow::buildProgressTable()
 {
-    m_progressBar->setFormat(tr("Video %1/%2: %p%").arg(current).arg(total));
-    m_lblStatus->setObjectName(QStringLiteral("lblStatus"));
-    m_lblStatus->setText(tr("Downloading %1/%2: %3").arg(current).arg(total).arg(currentTitle));
+    m_rowForUrl.clear();
+    m_tableProgress->setRowCount(0);
+    m_tableProgress->setRowCount(m_playlistEntries.size());
+
+    for (int i = 0; i < m_playlistEntries.size(); ++i) {
+        const PlaylistEntry& e = m_playlistEntries[i];
+        m_rowForUrl.insert(e.url, i);
+
+        auto* titleItem = new QTableWidgetItem(e.title);
+        titleItem->setToolTip(e.title);
+        m_tableProgress->setItem(i, 0, titleItem);
+
+        auto* bar = new QProgressBar;
+        bar->setRange(0, 100);
+        bar->setValue(0);
+        bar->setTextVisible(true);
+        bar->setFormat(tr("Queued"));
+        m_tableProgress->setCellWidget(i, 1, bar);
+
+        m_tableProgress->setItem(i, 2, new QTableWidgetItem(QStringLiteral("—")));
+        m_tableProgress->setItem(i, 3, new QTableWidgetItem(QStringLiteral("—")));
+    }
+}
+
+int MainWindow::rowForUrl(const QString& url) const
+{
+    return m_rowForUrl.value(url, -1);
+}
+
+void MainWindow::onPlaylistItemStarted(const QString& url, const QString& title,
+                                       int index, int total)
+{
+    Q_UNUSED(title)
+    const int row = rowForUrl(url);
+    if (row < 0) return;
+
+    if (auto* bar = qobject_cast<QProgressBar*>(m_tableProgress->cellWidget(row, 1))) {
+        bar->setValue(0);
+        bar->setFormat(QStringLiteral("%p%"));
+    }
+    if (auto* item = m_tableProgress->item(row, 2)) item->setText(QStringLiteral("…"));
+    m_tableProgress->scrollToItem(m_tableProgress->item(row, 0));
+
+    Q_UNUSED(index)
+    Q_UNUSED(total)
+}
+
+void MainWindow::onPlaylistItemProgress(const QString& url, int percent,
+                                        const QString& speed, const QString& eta)
+{
+    const int row = rowForUrl(url);
+    if (row < 0) return;
+
+    if (auto* bar = qobject_cast<QProgressBar*>(m_tableProgress->cellWidget(row, 1))) {
+        bar->setFormat(QStringLiteral("%p%"));
+        bar->setValue(percent);
+    }
+    if (auto* item = m_tableProgress->item(row, 2))
+        item->setText(speed.isEmpty() ? QStringLiteral("—") : speed);
+    if (auto* item = m_tableProgress->item(row, 3))
+        item->setText(eta.isEmpty() ? QStringLiteral("—") : eta);
+}
+
+void MainWindow::onPlaylistItemFinished(const QString& url, const QString& title, bool skipped)
+{
+    Q_UNUSED(title)
+    const int row = rowForUrl(url);
+    if (row < 0) return;
+
+    if (auto* bar = qobject_cast<QProgressBar*>(m_tableProgress->cellWidget(row, 1))) {
+        bar->setValue(100);
+        bar->setFormat(skipped ? tr("⚠ Skipped") : tr("✓ Done"));
+    }
+    if (auto* item = m_tableProgress->item(row, 2)) item->setText(QStringLiteral("—"));
+    if (auto* item = m_tableProgress->item(row, 3)) item->setText(QStringLiteral("—"));
+}
+
+void MainWindow::onPlaylistItemFailed(const QString& url, const QString& title, const QString& error)
+{
+    Q_UNUSED(title)
+    const int row = rowForUrl(url);
+    if (row < 0) return;
+
+    if (auto* bar = qobject_cast<QProgressBar*>(m_tableProgress->cellWidget(row, 1))) {
+        bar->setValue(0);
+        bar->setFormat(tr("✗ Error"));
+    }
+    if (auto* item = m_tableProgress->item(row, 2)) item->setText(QStringLiteral("—"));
+    if (auto* item = m_tableProgress->item(row, 3)) item->setText(QStringLiteral("—"));
+    if (auto* item = m_tableProgress->item(row, 0)) item->setToolTip(error);
+}
+
+void MainWindow::onPlaylistQueueStatus(int active, int queued, int processed, int total)
+{
+    m_lblParallelInfo->setText(
+        tr("Active: %1  |  Queued: %2  |  Done: %3/%4")
+            .arg(active).arg(queued).arg(processed).arg(total));
+
+    if (total > 0)
+        m_progressBar->setValue(processed * 100 / total);
 }
 
 void MainWindow::onMetadataReady(const QList<StreamInfo>& streams,

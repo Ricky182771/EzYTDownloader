@@ -21,6 +21,7 @@ public:
     QString lastFormat()     const;   // "mp4", "mkv", "mp3"
     QString lastResolution() const;
     QString lastBitrate()    const;   // "128k", "192k", "256k", "320k"
+    int     parallelDownloads() const; // 1..5 simultaneous playlist downloads
     QSize   windowSize()     const;
     QPoint  windowPos()      const;
 
@@ -29,6 +30,7 @@ public:
     void setLastFormat(const QString& fmt);
     void setLastResolution(const QString& res);
     void setLastBitrate(const QString& br);
+    void setParallelDownloads(int count);
     void setWindowSize(const QSize& size);
     void setWindowPos(const QPoint& pos);
 

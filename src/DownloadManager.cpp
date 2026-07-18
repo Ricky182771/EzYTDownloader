@@ -1,6 +1,7 @@
 #include "DownloadManager.h"
 #include "FetchWorker.h"
 #include "ConvertWorker.h"
+#include "ParallelDownloadManager.h"
 #include "Utils.h"
 
 #include <QDir>
@@ -14,6 +15,7 @@ DownloadManager::DownloadManager(QObject* parent)
     : QObject(parent)
     , m_fetch(new FetchWorker(this))
     , m_convert(new ConvertWorker(this))
+    , m_parallel(new ParallelDownloadManager(this))
 {
     // ── FetchWorker signals ─────────────────────────────────────────────
     connect(m_fetch, &FetchWorker::metadataReady,
@@ -34,6 +36,22 @@ DownloadManager::DownloadManager(QObject* parent)
             this,      &DownloadManager::onConversionFinished);
     connect(m_convert, &ConvertWorker::errorOccurred,
             this,      &DownloadManager::onError);
+
+    // ── ParallelDownloadManager signals (playlist) ──────────────────────
+    // Most map straight through to our own signals; itemStarted and
+    // allFinished are routed via slots so we can also emit status text.
+    connect(m_parallel, &ParallelDownloadManager::itemStarted,
+            this,       &DownloadManager::onPlaylistItemStarted);
+    connect(m_parallel, &ParallelDownloadManager::itemProgress,
+            this,       &DownloadManager::playlistItemProgress);
+    connect(m_parallel, &ParallelDownloadManager::itemFinished,
+            this,       &DownloadManager::playlistItemFinished);
+    connect(m_parallel, &ParallelDownloadManager::itemFailed,
+            this,       &DownloadManager::playlistItemFailed);
+    connect(m_parallel, &ParallelDownloadManager::queueStatus,
+            this,       &DownloadManager::playlistQueueStatus);
+    connect(m_parallel, &ParallelDownloadManager::allFinished,
+            this,       &DownloadManager::onPlaylistAllFinished);
 }
 
 DownloadManager::~DownloadManager()
@@ -86,33 +104,28 @@ void DownloadManager::downloadPlaylist(const QList<PlaylistEntry>& entries,
                                         const QString& outputDir,
                                         const QString& format,
                                         const QString& quality,
-                                        const QString& bitrate)
+                                        const QString& bitrate,
+                                        int maxParallel)
 {
-    m_cancelled        = false;
-    m_playlistMode     = true;
-    m_playlistQueue    = entries;
-    m_playlistIndex    = 0;
-    m_playlistOutputDir = outputDir;
-    m_playlistFormat   = format;
-    m_playlistQuality  = quality;
-    m_playlistBitrate  = bitrate;
-
-    downloadNextPlaylistItem();
+    m_cancelled = false;
+    emit statusMessage(tr("Starting playlist download (%1 videos, %2 parallel)…")
+                           .arg(entries.size()).arg(qBound(1, maxParallel, 5)));
+    m_parallel->start(entries, outputDir, format, quality, bitrate, maxParallel);
 }
 
 void DownloadManager::cancel()
 {
-    m_cancelled    = true;
-    m_playlistMode = false;
+    m_cancelled = true;
     m_fetch->cancel();
     m_convert->cancel();
+    m_parallel->cancel();
     cleanupTemp();
     emit statusMessage(tr("Cancelled."));
 }
 
 bool DownloadManager::isBusy() const
 {
-    return m_fetch->isRunning() || m_convert->isRunning();
+    return m_fetch->isRunning() || m_convert->isRunning() || m_parallel->isBusy();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,16 +156,6 @@ void DownloadManager::onDownloadProgress(double percent, const QString& speed, c
 void DownloadManager::onDownloadFinished(const QString& rawPath)
 {
     if (m_cancelled) return;
-
-    if (m_playlistMode) {
-        if (rawPath == QStringLiteral("__SKIPPED__")) {
-            const QString skippedTitle = m_playlistQueue[m_playlistIndex].title;
-            emit statusMessage(tr("Skipped (unavailable): %1").arg(skippedTitle));
-        }
-        ++m_playlistIndex;
-        downloadNextPlaylistItem();
-        return;
-    }
 
     m_tempPath = rawPath;
     qDebug() << "[DownloadManager] Raw download complete:" << rawPath;
@@ -186,6 +189,30 @@ void DownloadManager::onError(const QString& msg)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Parallel manager relays
+// ─────────────────────────────────────────────────────────────────────────────
+
+void DownloadManager::onPlaylistItemStarted(const QString& url, const QString& title,
+                                             int index, int total)
+{
+    emit statusMessage(tr("Downloading %1/%2: %3").arg(index).arg(total).arg(title));
+    emit playlistItemStarted(url, title, index, total);
+}
+
+void DownloadManager::onPlaylistAllFinished(const QString& outputDir, int completed, int failed)
+{
+    if (m_cancelled) return;
+
+    if (failed > 0)
+        emit statusMessage(tr("Playlist complete: %1 downloaded, %2 failed.")
+                               .arg(completed).arg(failed));
+    else
+        emit statusMessage(tr("Playlist download complete! (%1 videos)").arg(completed));
+
+    emit finished(outputDir);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -196,30 +223,6 @@ void DownloadManager::cleanupTemp()
         qDebug() << "[DownloadManager] Removed temp:" << m_tempPath;
     }
     m_tempPath.clear();
-}
-
-void DownloadManager::downloadNextPlaylistItem()
-{
-    if (m_cancelled || m_playlistIndex >= m_playlistQueue.size()) {
-        m_playlistMode = false;
-        if (!m_cancelled) {
-            emit statusMessage(tr("Playlist download complete!"));
-            emit finished(m_playlistOutputDir);
-        }
-        return;
-    }
-
-    const PlaylistEntry& entry = m_playlistQueue[m_playlistIndex];
-    const int total = m_playlistQueue.size();
-
-    emit playlistItemStarted(m_playlistIndex + 1, total, entry.title);
-    emit statusMessage(tr("Downloading %1/%2: %3")
-                           .arg(m_playlistIndex + 1).arg(total).arg(entry.title));
-    emit downloadProgress(0, QString(), QString());
-
-    m_fetch->downloadPlaylistItem(entry.url, m_playlistFormat,
-                                   m_playlistQuality, m_playlistBitrate,
-                                   m_playlistOutputDir);
 }
 
 QString DownloadManager::buildFinalPath() const
