@@ -26,6 +26,26 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPixmap>
+#include <QPalette>
+#include <QAbstractItemView>
+
+// On Linux with compositing the combo popup window inherits the ARGB visual
+// used for rgba() QSS backgrounds and appears transparent.  Overriding
+// showPopup() is the only reliable way to paint the popup container opaque.
+class OpaqueComboBox : public QComboBox {
+public:
+    using QComboBox::QComboBox;
+    void showPopup() override {
+        QComboBox::showPopup();
+        if (QWidget* popup = view()->parentWidget()) {
+            popup->setAutoFillBackground(true);
+            QPalette pal = popup->palette();
+            pal.setColor(QPalette::Window, QColor(0x1a, 0x1f, 0x2e));
+            pal.setColor(QPalette::Base,   QColor(0x1a, 0x1f, 0x2e));
+            popup->setPalette(pal);
+        }
+    }
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Construction
@@ -164,10 +184,13 @@ void MainWindow::setupUi()
 
     // Format
     m_lblFormat = new QLabel(QStringLiteral("Format"));
-    m_cmbFormat = new QComboBox;
+    m_cmbFormat = new OpaqueComboBox;
     m_cmbFormat->addItems({QStringLiteral("MP4 (Video)"),
                            QStringLiteral("MKV (Video)"),
-                           QStringLiteral("MP3 (Audio)")});
+                           QStringLiteral("MP3 (Audio)"),
+                           QStringLiteral("FLAC (Audio)"),
+                           QStringLiteral("OGG — FLAC (Audio)"),
+                           QStringLiteral("WAV (Audio)")});
     connect(m_cmbFormat, qOverload<int>(&QComboBox::currentIndexChanged),
             this, &MainWindow::onFormatChanged);
 
@@ -176,13 +199,13 @@ void MainWindow::setupUi()
 
     // Resolution (video)
     m_lblResolution = new QLabel(QStringLiteral("Resolution"));
-    m_cmbResolution = new QComboBox;
+    m_cmbResolution = new OpaqueComboBox;
     optGrid->addWidget(m_lblResolution, 1, 0);
     optGrid->addWidget(m_cmbResolution, 1, 1);
 
     // Bitrate (audio)
     m_lblBitrate = new QLabel(QStringLiteral("Bitrate"));
-    m_cmbBitrate = new QComboBox;
+    m_cmbBitrate = new OpaqueComboBox;
     m_cmbBitrate->addItems({QStringLiteral("320k"),
                             QStringLiteral("256k"),
                             QStringLiteral("192k"),
@@ -267,9 +290,12 @@ void MainWindow::loadSettings()
     m_editOutputDir->setText(s.lastDirectory());
 
     const QString fmt = s.lastFormat();
-    if (fmt == QStringLiteral("mkv"))      m_cmbFormat->setCurrentIndex(1);
-    else if (fmt == QStringLiteral("mp3")) m_cmbFormat->setCurrentIndex(2);
-    else                                    m_cmbFormat->setCurrentIndex(0);
+    if      (fmt == QStringLiteral("mkv"))  m_cmbFormat->setCurrentIndex(1);
+    else if (fmt == QStringLiteral("mp3"))  m_cmbFormat->setCurrentIndex(2);
+    else if (fmt == QStringLiteral("flac")) m_cmbFormat->setCurrentIndex(3);
+    else if (fmt == QStringLiteral("ogg"))  m_cmbFormat->setCurrentIndex(4);
+    else if (fmt == QStringLiteral("wav"))  m_cmbFormat->setCurrentIndex(5);
+    else                                     m_cmbFormat->setCurrentIndex(0);
 
     const int brIdx = m_cmbBitrate->findText(s.lastBitrate());
     if (brIdx >= 0) m_cmbBitrate->setCurrentIndex(brIdx);
@@ -291,6 +317,9 @@ void MainWindow::saveSettings()
         QStringLiteral("mp4"),
         QStringLiteral("mkv"),
         QStringLiteral("mp3"),
+        QStringLiteral("flac"),
+        QStringLiteral("ogg"),
+        QStringLiteral("wav"),
     };
     s.setLastFormat(fmtKeys.value(m_cmbFormat->currentIndex(), QStringLiteral("mp4")));
 
@@ -322,7 +351,9 @@ void MainWindow::setUiState(const QString& state)
     m_cmbResolution->setEnabled(!busy && m_cmbResolution->count() > 0);
     m_cmbBitrate->setEnabled(!busy);
     m_btnBrowse->setEnabled(!busy);
-    m_btnDownload->setEnabled(idle && m_cmbResolution->count() > 0);
+    const bool hasContent = m_isPlaylist ? !m_playlistEntries.isEmpty()
+                                                  : m_cmbResolution->count() > 0;
+    m_btnDownload->setEnabled(idle && hasContent);
     m_btnCancel->setEnabled(busy);
 
     if (idle) {
@@ -386,6 +417,9 @@ void MainWindow::onDownloadClicked()
         QStringLiteral("mp4"),
         QStringLiteral("mkv"),
         QStringLiteral("mp3"),
+        QStringLiteral("flac"),
+        QStringLiteral("ogg"),
+        QStringLiteral("wav"),
     };
     const QString format  = fmtKeys.value(m_cmbFormat->currentIndex(), QStringLiteral("mp4"));
     const QString bitrate = m_cmbBitrate->currentText();
@@ -417,7 +451,23 @@ void MainWindow::onDownloadClicked()
         return;
 
     const int realIdx = data.toInt();
-    if (realIdx < 0 || realIdx >= m_streams.size()) {
+
+    // "Best quality" pseudo-entry stored as -1
+    if (realIdx < 0) {
+        StreamInfo bestStream;
+        bestStream.formatId   = QStringLiteral("bestvideo");
+        bestStream.isAudioOnly = false;
+        bestStream.duration   = m_currentDuration;
+        bestStream.title      = m_streams.isEmpty()
+                                    ? QStringLiteral("download")
+                                    : m_streams.first().title;
+        qDebug() << "[MainWindow] Download: format=" << format << "stream=best quality";
+        setUiState(QStringLiteral("downloading"));
+        m_manager->startDownload(m_currentUrl, bestStream, outDir, format, bitrate);
+        return;
+    }
+
+    if (realIdx >= m_streams.size()) {
         m_lblStatus->setText(tr("Invalid stream selection."));
         return;
     }
@@ -446,18 +496,22 @@ void MainWindow::onBrowseClicked()
 
 void MainWindow::onFormatChanged(int index)
 {
-    const bool isAudio = (index == 2); // MP3
+    // 0=MP4, 1=MKV → video;  2=MP3, 3=FLAC, 4=OGG-FLAC, 5=WAV → audio
+    const bool isAudio    = (index >= 2);
+    const bool hasBitrate = (index == 2); // only MP3 uses a bitrate selector
 
     m_lblResolution->setVisible(!isAudio);
     m_cmbResolution->setVisible(!isAudio);
-    m_lblBitrate->setVisible(isAudio);
-    m_cmbBitrate->setVisible(isAudio);
+    m_lblBitrate->setVisible(hasBitrate);
+    m_cmbBitrate->setVisible(hasBitrate);
 
     if (m_isPlaylist) {
         // In playlist mode, populate with quality presets (not stream-specific data)
         if (!isAudio) {
             m_cmbResolution->clear();
             m_cmbResolution->addItem(tr("Best quality"), QStringLiteral("best"));
+            m_cmbResolution->addItem(tr("4K (2160p)"),   QStringLiteral("2160"));
+            m_cmbResolution->addItem(tr("2K (1440p)"),   QStringLiteral("1440"));
             m_cmbResolution->addItem(tr("1080p"),        QStringLiteral("1080"));
             m_cmbResolution->addItem(tr("720p"),         QStringLiteral("720"));
             m_cmbResolution->addItem(tr("480p"),         QStringLiteral("480"));
@@ -469,6 +523,10 @@ void MainWindow::onFormatChanged(int index)
     // Single-video mode: filter streams by audio/video type
     if (!m_streams.isEmpty()) {
         m_cmbResolution->clear();
+        if (!isAudio) {
+            // "Best quality" uses yt-dlp's bestvideo+bestaudio selector
+            m_cmbResolution->addItem(tr("Best quality"), QVariant(-1));
+        }
         for (int i = 0; i < m_streams.size(); ++i) {
             const auto& s = m_streams[i];
             if (isAudio && s.isAudioOnly) {

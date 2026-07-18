@@ -34,10 +34,27 @@ void ConvertWorker::convert(const QString& input, const QString& output,
 
     if (format == QStringLiteral("mp3")) {
         // Audio extraction + conversion to MP3
-        args << QStringLiteral("-vn")             // no video
+        args << QStringLiteral("-vn")
              << QStringLiteral("-acodec") << QStringLiteral("libmp3lame")
              << QStringLiteral("-ab") << bitrate  // e.g. "320k"
              << QStringLiteral("-f") << QStringLiteral("mp3");
+    } else if (format == QStringLiteral("flac")) {
+        // Lossless FLAC in native container
+        args << QStringLiteral("-vn")
+             << QStringLiteral("-acodec") << QStringLiteral("flac")
+             << QStringLiteral("-compression_level") << QStringLiteral("8")
+             << QStringLiteral("-f") << QStringLiteral("flac");
+    } else if (format == QStringLiteral("ogg")) {
+        // Lossless FLAC codec in OGG container (Ogg FLAC)
+        args << QStringLiteral("-vn")
+             << QStringLiteral("-acodec") << QStringLiteral("flac")
+             << QStringLiteral("-compression_level") << QStringLiteral("8")
+             << QStringLiteral("-f") << QStringLiteral("ogg");
+    } else if (format == QStringLiteral("wav")) {
+        // Lossless PCM in WAV container
+        args << QStringLiteral("-vn")
+             << QStringLiteral("-acodec") << QStringLiteral("pcm_s16le")
+             << QStringLiteral("-f") << QStringLiteral("wav");
     } else if (format == QStringLiteral("mkv")) {
         // Remux to MKV — copy all streams (MKV supports any codec)
         args << QStringLiteral("-c") << QStringLiteral("copy")

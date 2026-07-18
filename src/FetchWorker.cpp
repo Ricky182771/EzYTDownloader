@@ -41,8 +41,11 @@ void FetchWorker::downloadPlaylistItem(const QString& url,
 {
     m_expectedOutputPath = outputDir;
 
+    const bool isAudioFmt = (format != QStringLiteral("mp4") &&
+                              format != QStringLiteral("mkv"));
+
     QString fmtSelector;
-    if (format == QStringLiteral("mp3")) {
+    if (isAudioFmt) {
         fmtSelector = QStringLiteral("bestaudio/best");
     } else if (quality == QStringLiteral("best")) {
         fmtSelector = QStringLiteral("bestvideo+bestaudio/best");
@@ -65,6 +68,16 @@ void FetchWorker::downloadPlaylistItem(const QString& url,
         args << QStringLiteral("--extract-audio")
              << QStringLiteral("--audio-format") << QStringLiteral("mp3")
              << QStringLiteral("--audio-quality") << bitrate;
+    } else if (format == QStringLiteral("flac")) {
+        args << QStringLiteral("--extract-audio")
+             << QStringLiteral("--audio-format") << QStringLiteral("flac");
+    } else if (format == QStringLiteral("ogg")) {
+        // yt-dlp outputs OGG Vorbis; ConvertWorker re-encodes to FLAC-in-OGG for single videos
+        args << QStringLiteral("--extract-audio")
+             << QStringLiteral("--audio-format") << QStringLiteral("vorbis");
+    } else if (format == QStringLiteral("wav")) {
+        args << QStringLiteral("--extract-audio")
+             << QStringLiteral("--audio-format") << QStringLiteral("wav");
     } else {
         args << QStringLiteral("--remux-video") << format;
     }
@@ -84,10 +97,15 @@ void FetchWorker::downloadStream(const QString& url, const QString& formatId,
 
     // Build the format string
     QString dlFormat;
-    if (mergeAudio)
-        dlFormat = QStringLiteral("%1+bestaudio/%1").arg(formatId);
-    else
+    if (mergeAudio) {
+        // "bestvideo" is the special token for the "Best quality" combo entry
+        if (formatId == QStringLiteral("bestvideo"))
+            dlFormat = QStringLiteral("bestvideo+bestaudio/best");
+        else
+            dlFormat = QStringLiteral("%1+bestaudio/%1").arg(formatId);
+    } else {
         dlFormat = formatId;
+    }
 
     QStringList args = {
         QStringLiteral("-f"), dlFormat,
@@ -239,9 +257,15 @@ void FetchWorker::onProcessFinished(int exitCode, QProcess::ExitStatus status)
     m_stdoutBuffer += m_process->readAllStandardOutput();
 
     if (m_mode == Mode::Metadata) {
-        // Parse the entire accumulated JSON blob
-        if (!m_cancelled && status == QProcess::NormalExit && exitCode == 0)
+        // yt-dlp may exit with code 1 when some playlist entries are unavailable,
+        // yet it still writes valid JSON to stdout. Parse whatever we received;
+        // only skip if we were cancelled or the process crashed with no output.
+        if (!m_cancelled && (status == QProcess::NormalExit || !m_stdoutBuffer.trimmed().isEmpty()))
             parseMetadataJson(m_stdoutBuffer);
+        m_stdoutBuffer.clear();
+        m_process->deleteLater();
+        m_process = nullptr;
+        return;
     } else {
         // Download / playlist-item mode: process remaining progress lines
         while (true) {
@@ -265,14 +289,21 @@ void FetchWorker::onProcessFinished(int exitCode, QProcess::ExitStatus status)
     if (m_cancelled)
         return; // user-initiated cancel, no error
 
-    if (status == QProcess::CrashExit || exitCode != 0) {
-        emit errorOccurred(tr("yt-dlp exited with code %1").arg(exitCode));
+    if (status == QProcess::CrashExit) {
+        emit errorOccurred(tr("yt-dlp crashed unexpectedly"));
         return;
     }
 
     // Playlist item: yt-dlp handled remux/extraction internally; no file lookup needed.
+    // A non-zero exit (e.g. unavailable video) is treated as a soft skip so the rest
+    // of the playlist continues.
     if (m_mode == Mode::PlaylistItemDownload) {
-        emit downloadFinished(QString());
+        emit downloadFinished(exitCode != 0 ? QStringLiteral("__SKIPPED__") : QString());
+        return;
+    }
+
+    if (exitCode != 0) {
+        emit errorOccurred(tr("yt-dlp exited with code %1").arg(exitCode));
         return;
     }
 

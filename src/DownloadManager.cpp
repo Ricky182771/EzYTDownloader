@@ -145,6 +145,10 @@ void DownloadManager::onDownloadFinished(const QString& rawPath)
     if (m_cancelled) return;
 
     if (m_playlistMode) {
+        if (rawPath == QStringLiteral("__SKIPPED__")) {
+            const QString skippedTitle = m_playlistQueue[m_playlistIndex].title;
+            emit statusMessage(tr("Skipped (unavailable): %1").arg(skippedTitle));
+        }
         ++m_playlistIndex;
         downloadNextPlaylistItem();
         return;
